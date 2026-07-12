@@ -129,18 +129,19 @@ def build_label_map(model):
     return hmm_to_true
 
 
-def decode_condition(csv_path, model, hmm_to_true, feature_mode):
-    """
-    Decode every trace and attach the inferred simulator-state label.
+def decode_dataframe(df, model, hmm_to_true, feature_mode):
+    """Decode a generated dataset and attach inferred simulator-state labels.
 
     The kinetic path uses smoothed marginal MAP; the Gaussian-HMM ablation uses
-    Viterbi. Returns the augmented DataFrame.
+    Viterbi. Keeping this dataframe-level function public lets compact
+    sensitivity benchmarks exercise the exact production decoder without
+    writing temporary CSVs or duplicating the causal-filter logic.
 
     NOTE: decoding is done PER TRACE. Feeding all traces as one long sequence
     would let the model hallucinate a transition from the end of one cell into
     the beginning of the next.
     """
-    df = pd.read_csv(csv_path)
+    df = df.copy()
     inferred = np.empty(len(df), dtype=int)
     causal = np.empty(len(df), dtype=int) if feature_mode == "kinetic" else None
 
@@ -166,6 +167,11 @@ def decode_condition(csv_path, model, hmm_to_true, feature_mode):
         df["causal_state"] = causal
         df["causal_label"] = [STATE_NAMES[s] for s in causal]
     return df
+
+
+def decode_condition(csv_path, model, hmm_to_true, feature_mode):
+    """Load a CSV and delegate to :func:`decode_dataframe`."""
+    return decode_dataframe(pd.read_csv(csv_path), model, hmm_to_true, feature_mode)
 
 
 # --------------------------------------------------------------------------- #
