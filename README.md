@@ -102,7 +102,4 @@ python src/plot_example.py
 - In-silico control is a model of control, not proof in tissue; the wet-lab step
   is what closes that gap, and the pipeline runs unchanged on real recordings.
 
-## Status
 
-Synthetic-data and modeling phase. The controller is developed and stress-tested
-in silico first; wet-lab validation planned.
