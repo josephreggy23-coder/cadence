@@ -167,8 +167,8 @@ drift, heterogeneous traces, and multiple seeds.
 This repository is not a competition application. The AAN Neuroscience Research
 Prize requires the applicant's original research and writing. See [AAN prize
 readiness](docs/aan_prize_readiness.md), [AI assistance and
-authorship](AI_ASSISTANCE.md), [references](docs/references.md), and [citation
-metadata](CITATION.cff).
+authorship](AI_ASSISTANCE.md), [references](docs/references.md), [citation
+metadata](CITATION.cff), and the [contribution guide](CONTRIBUTING.md).
 
 ## Author
 
