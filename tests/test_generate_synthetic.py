@@ -9,6 +9,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from generate_synthetic import (
     generate_dataset,
+    high_row,
     load_dataset,
     simulation_metadata,
     state_occupancy,
@@ -36,6 +37,14 @@ class SimulateTraceTests(unittest.TestCase):
         summary = state_occupancy(np.array([0, 0, 2, 3]))
         self.assertEqual(summary["QUIESCENT"], 0.5)
         self.assertAlmostEqual(sum(summary.values()), 1.0)
+
+    def test_high_row_stays_valid_at_extreme_probabilities(self):
+        for proposed_probability in (-1.0, 0.0, 0.99, 1.0, 2.0):
+            with self.subTest(proposed_probability=proposed_probability):
+                row = high_row(proposed_probability)
+                self.assertTrue(np.all(row >= 0.0))
+                self.assertAlmostEqual(float(row.sum()), 1.0)
+                self.assertLessEqual(float(row[-1]), 0.98)
 
     def test_dataset_generation_is_deterministic_and_labeled(self):
         first = generate_dataset("intact", n_traces=2, n_frames=3, seed=4)

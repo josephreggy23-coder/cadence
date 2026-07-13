@@ -26,7 +26,7 @@ So the discriminating information is not "how high" but "how high AND which way
 is it moving": refractory is mid-level *and falling steeply*; oscillatory is
 mid-level and not systematically falling; quiescent is low and flat.
 
-MEASURED EFFECT (intact condition, the one used to learn the healthy law):
+MEASURED EFFECT (intact synthetic condition, used to learn the exit law):
     feature set     overall acc    SUSTAINED_HIGH recall    REFRACTORY recall
     level only         69.6%              77.8%                   24.1%
     level + slope      68.5%              93.2%                   37.8%

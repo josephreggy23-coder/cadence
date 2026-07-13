@@ -1,102 +1,29 @@
-"""
-controller.py  —  CADENCE pipeline, Module 4  ***THE SOLUTION***
-================================================================
-Everything before this module exists to make this module possible. Modules 1-3
-learn the glia's own regulatory rule; this module USES that rule to decide when,
-and how hard, to intervene — and does so minimally, because it acts *through* the
-endogenous feedback rather than overriding it.
+"""CADENCE Module 4: a synthetic controller stress test.
 
-THE CONTROL PROBLEM
--------------------
-Keep calcium in a healthy oscillatory cadence and out of pathological
-SUSTAINED_HIGH, while spending as little stimulation as possible. Cost matters:
-real glial neuromodulation that blasts continuously wastes energy and risks
-driving astrocytes into reactive/cytotoxic states. "Works but costs everything"
-is not a solution.
+The policy acts on a four-state simulated plant using
 
-HOW THE INTERVENTION IS MODELLED (and why the kill-shot is real)
-----------------------------------------------------------------
-This is the single most important modelling decision in the project.
+    P(high -> refractory | L, u) = sigmoid(b0 + b1 * (L + kappa * u)).
 
-The stimulus does NOT force the state directly. It acts by *driving the
-load-sensing feedback pathway* — it makes the cell behave as though it had
-accumulated more calcium load than it actually has:
+This equation is an assumption, not a discovered astrocyte mechanism. Because
+the same b1 multiplies both recent high-state exposure and the intervention,
+setting b1 near zero algebraically disables both. The blocked-pathway experiment
+is therefore a structural consistency check for this simulator, not an
+independent biological falsification.
 
-        P(high -> refractory | L, u) = sigmoid(b0 + b1 * (L + kappa * u))
+While the estimated state is HIGH, the policy converts a constant-hazard horizon
+approximation into a clipped one-step action. It is the smallest action under
+that approximation; it is not a solved finite-horizon optimal-control problem,
+because future load and state probabilities are not propagated.
 
-Note where `u` sits: INSIDE the `b1` term. The consequence is the whole thesis of
-the project. If the feedback pathway is pharmacologically blocked (b1 ~ 0), then
-b1*(L + kappa*u) ~ 0 no matter how large `u` is — the controller can spend
-unlimited stimulation and produce no suppression, because the mechanism it works
-through is gone.
-
-Had we instead written `sigmoid(b0 + b1*L + gain*u)`, the stimulus would bypass
-the feedback pathway and would still "work" under blockade. That would make the
-kill-shot experiment unfalsifiable and the entire claim circular. The kill-shot
-is only meaningful because the intervention is wired through b1.
-
-THE POLICY: MINIMAL AND PREDICTIVE
-----------------------------------
-At each frame, while the cell is believed to be in SUSTAINED_HIGH:
-
-  1. Predict whether the cell will self-suppress on its own within a horizon H:
-         P(escape by itself) = 1 - (1 - p_endo)^H,   p_endo = sigmoid(b0 + b1*L)
-  2. If that already exceeds the target, DO NOTHING. The cell is going to fix
-     itself; intervening would be wasted cost. This is where the savings come
-     from — CADENCE is silent most of the time.
-  3. Only if the cell is predicted to FAIL to recover in time, solve for the
-     SMALLEST u that lifts the escape probability to target:
-         p_needed = 1 - (1 - target)^(1/H)
-         u* = (logit(p_needed) - b0 - b1*L) / (b1 * kappa),  clipped to [0, u_max]
-
-Step 3 is minimal by construction: it is the exact solution of "what is the least
-stimulation that achieves the goal", not a fixed dose.
-
-ONLINE STATE ESTIMATION (no peeking at the future)
---------------------------------------------------
-Modules 1-3 may use forward-BACKWARD smoothing, which needs the whole trace. A
-controller cannot. Here we run the kinetic model's FORWARD filter, which is
-causal by construction: the belief at frame t uses only frames 1..t.
-
-Note this got SIMPLER, not harder, when the estimator improved. The previous
-Gaussian estimator used a centred derivative that peeked at frame t+1, so the
-controller had to act on a one-frame-delayed estimate to keep its online features
-matched to training. Modelling the sensor explicitly removed the need for that
-feature entirely, and with it the latency workaround: the kinetic filter is
-exactly causal with zero lag.
-
-WHAT IS COMPARED
-----------------
-  (a) no control       - the disease runs unchecked; the floor.
-  (b) open-loop        - fixed continuous stimulation, the current clinical
-                         paradigm: no sensing, no timing, same dose forever.
-  (c) CADENCE          - this policy.
-
-Metrics: time spent in pathological SUSTAINED_HIGH (measured on the TRUE hidden
-state, which the controller never sees), and cumulative intervention cost sum(u).
-
-WHICH LAW THE CONTROLLER USES, AND WHY CALIBRATION IS THE HARD PART
--------------------------------------------------------------------
-With the kinetic estimator, Module 3 now recovers b1 = +0.832 end-to-end against
-a ground truth of +0.9 (its CI contains the true value), so the old ~5x
-attenuation is gone. That fixed the estimate - and immediately exposed a
-different problem, which is the real lesson of this module.
-
-An ACCURATE law learned from HEALTHY cells makes the controller do almost
-nothing on a DISEASED one: it correctly believes healthy cells self-suppress
-quickly, concludes this cell will too, and stays silent while the cell never
-recovers (the "learned law" and "healthy-law" arms, both ~25% pathological at a
-cost of ~10). Better science made the naive controller worse, because the
-coefficients do not transfer equally:
-  - b1, the feedback GAIN, is a property of the pathway and does transfer.
-  - b0, the BASELINE PROPENSITY, is what disease changes, and must be measured
-    on the cell being treated.
-`AdaptiveCadence` does exactly that, estimating b0 online from the patient's own
-trace, and carries a safety interlock that shuts stimulation down when the
-pathway proves unresponsive. See its docstring.
+The online estimator is causal. Outcomes are reported as synthetic high-state
+occupancy and intervention cost in arbitrary units. No result in this module is
+evidence of safety, efficacy, or mechanism in tissue, animals, or people. The
+simulated challenge shift and transfer of b1 across conditions are assumptions
+that require independent biological testing.
 """
 
 import argparse
+import json
 import os
 
 import numpy as np
@@ -129,6 +56,7 @@ TRUE_B0, TRUE_B1_INTACT, TRUE_B1_BLOCKED = -3.0, 0.9, 0.02
 
 # Intervention efficacy: how much "virtual load" one unit of stimulation buys.
 KAPPA = 1.0
+CADENCE_U_MAX = 8.0
 
 
 def sigmoid(x):
@@ -159,16 +87,16 @@ def high_row(p_off):
 
 
 # --------------------------------------------------------------------------- #
-# Disease model
+# Synthetic challenge model
 # --------------------------------------------------------------------------- #
-def disease_transitions(entry_boost=0.30):
+def challenge_transitions(entry_boost=0.30):
     """
-    The disease model: an elevated tendency to ENTER SUSTAINED_HIGH.
+    Synthetic challenge: an elevated tendency to enter SUSTAINED_HIGH.
 
     We raise P(OSCILLATORY -> HIGH) from 0.12 to 0.12+entry_boost, taking the mass
     from "stay oscillatory". Combined with `b0_shift` below (harder to switch off),
-    this reproduces the pathological phenotype we want to restore: the cell keeps
-    falling into the high state and struggles to leave it.
+    this creates the high-occupancy behavior used to stress-test the policies.
+    It is not calibrated to a named disease or biological preparation.
     """
     T = BASE_T.copy()
     T[OSCILLATORY, HIGH] += entry_boost
@@ -186,8 +114,9 @@ class OnlineStateEstimator:
     Causal HMM forward filter. Maintains a belief over hidden states using only
     observations seen so far — no Viterbi, no future frames.
 
-    Because the trained emission uses a CENTRED derivative, the estimate returned
-    at call t refers to frame t-1 (one-frame latency). See module docstring.
+    The preferred kinetic model is exactly causal. The retained Gaussian-HMM
+    ablation uses a centred derivative and therefore returns a one-frame-delayed
+    estimate.
     """
 
     def __init__(self, npz_path):
@@ -273,11 +202,7 @@ class NoControl:
 
 
 class OpenLoop:
-    """
-    The current clinical paradigm: a fixed dose, applied continuously, with no
-    sensing and no timing. It is the honest strawman — it is what CADENCE has to
-    beat, and it does restore rhythm; the question is at what cost.
-    """
+    """Fixed-dose synthetic comparator with no sensing or timing."""
     name = "open-loop"
 
     def __init__(self, dose=1.0):
@@ -289,15 +214,15 @@ class OpenLoop:
 
 class Cadence:
     """
-    Model-based, predictive, minimal.
+    Model-based controller under a constant-hazard horizon approximation.
 
-    Intervenes ONLY when the learned law says the cell will fail to self-suppress
-    within `horizon` frames, and then only by the smallest amount that restores
-    the target escape probability.
+    The returned dose is minimal only for the policy's local algebraic
+    approximation; this class does not solve a dynamic optimal-control problem.
     """
     name = "CADENCE"
 
-    def __init__(self, b0, b1, horizon=6, target=0.90, u_max=8.0, kappa=KAPPA):
+    def __init__(self, b0, b1, horizon=6, target=0.90,
+                 u_max=CADENCE_U_MAX, kappa=KAPPA):
         self.b0, self.b1 = b0, b1
         self.horizon, self.target, self.u_max, self.kappa = horizon, target, u_max, kappa
 
@@ -315,9 +240,7 @@ class Cadence:
         logit_needed = np.log(p_needed / (1.0 - p_needed))
         denom = self.b1 * self.kappa
         if abs(denom) < 1e-9:
-            # Feedback pathway is (believed) dead: no finite dose can work through
-            # it. Ask for the maximum and let the simulation show it fails - this
-            # is the kill-shot condition, not an error.
+            # Under the assumed coupling, no finite dose can act when b1 is zero.
             return self.u_max
         u = (logit_needed - self.b0 - self.b1 * L) / denom
         return float(np.clip(u, 0.0, self.u_max))
@@ -325,24 +248,11 @@ class Cadence:
 
 class AdaptiveCadence(Cadence):
     """
-    CADENCE that CALIBRATES ITSELF on the cell it is treating.
+    Synthetic policy that updates b0 from unstimulated inferred transitions.
 
-    THE PROBLEM THIS SOLVES
-    Modules 1-3 learn the feedback law from HEALTHY cells. Applying that law
-    unchanged to a diseased cell makes the controller fail - it believes the cell
-    will suppress itself shortly, so it stays silent while the cell never
-    recovers (demonstrated explicitly by the "healthy-law" arm).
-
-    The reason is that the two coefficients do not transfer equally:
-      - b1, the feedback GAIN, is a property of the signalling pathway. It is
-        what Module 3 recovers, and blockade experiments show it is what disease
-        leaves intact.
-      - b0, the BASELINE PROPENSITY to switch off, is cell- and condition-
-        specific. It is exactly what disease changes.
-
-    So this policy fixes b1 at the population value and estimates b0 online from
-    the cell in front of it, which is what a clinician does when they baseline a
-    patient before setting stimulation parameters.
+    The simulator assumes b1 transfers while b0 changes across conditions. This
+    class tests adaptation under that assumption; it does not establish that the
+    same parameter split holds biologically.
 
     HOW
       1. OBSERVE-ONLY WINDOW. For the first `calib_frames` frames the controller
@@ -353,14 +263,14 @@ class AdaptiveCadence(Cadence):
       2. Fit b0 by 1-D maximum likelihood with b1 held fixed.
       3. Refit periodically as more evidence accumulates, then control as usual.
 
-    HONEST LIMITATION: the observe-only window means the cell goes untreated for
-    its duration, which is a real clinical cost, and the estimate is only as good
-    as the online state inference feeding it.
+    Limitation: the observe-only window delays intervention, and the estimate is
+    only as good as the online state inference feeding it.
     """
     name = "CADENCE (self-calibrating)"
 
     def __init__(self, b0_init, b1, calib_frames=150, refit_every=50,
-                 min_events=8, min_stim_trials=40, futility_margin=0.0, **kw):
+                 min_events=8, min_stim_trials=40, futility_margin=0.0,
+                 max_cumulative_dose=180.0, **kw):
         super().__init__(b0_init, b1, **kw)
         self.calib_frames = calib_frames
         self.refit_every = refit_every
@@ -372,48 +282,47 @@ class AdaptiveCadence(Cadence):
         self.obs_L, self.obs_y = [], []
         self.calibrated = False
 
-        # --- safety interlock state (see _check_futility) ------------------ #
+        # --- simulation exposure constraints (see _check_futility) -------- #
         self.min_stim_trials = min_stim_trials
         self.futility_margin = futility_margin
+        self.max_cumulative_dose = float(max_cumulative_dose)
+        if self.max_cumulative_dose <= 0:
+            raise ValueError("max_cumulative_dose must be positive")
         self.n_stim = self.k_stim = 0
         self.n_quiet = self.k_quiet = 0
         self.aborted = False
+        self.cumulative_dose = 0.0
+        self.budget_exhausted = False
 
     def _record(self, state, L):
-        """Turn consecutive observations into (load, switched-off?) pairs."""
+        """Record an inferred transition without contaminating calibration.
+
+        Baseline ``b0`` describes the cell's *unaided* switch-off propensity, so
+        only transitions following zero stimulation belong in ``obs_L`` and
+        ``obs_y``.  Stimulated outcomes are still retained in the separate
+        counters used by the futility interlock.
+        """
         if self.prev_state == HIGH:
             switched = 1.0 if state == REFRACTORY else 0.0
-            self.obs_L.append(self.prev_L)
-            self.obs_y.append(switched)
             # bucket the same outcome by whether we were stimulating, so the
             # interlock can ask "is the stimulus doing anything at all?"
             if self.prev_u > 0:
                 self.n_stim += 1
                 self.k_stim += switched
             else:
+                self.obs_L.append(self.prev_L)
+                self.obs_y.append(switched)
                 self.n_quiet += 1
                 self.k_quiet += switched
         self.prev_state, self.prev_L = state, L
 
     def _check_futility(self):
         """
-        SAFETY INTERLOCK: stop stimulating a pathway that is not responding.
+        Simulation safeguard that stops after an unpromising response history.
 
-        Motivation, found empirically rather than anticipated: when the feedback
-        pathway is blocked, self-calibration observes a cell that never switches
-        off, infers a very low b0, and therefore demands ever-larger doses. In
-        testing it spent MORE than continuous open-loop stimulation (829 vs 600)
-        while achieving exactly nothing. For a real therapy that is the worst
-        possible failure mode - maximum exposure, zero benefit.
-
-        So the controller audits itself. It compares the observed switch-off rate
-        on stimulated frames against unstimulated ones. If stimulation is not
-        beating baseline once enough trials have accumulated, the pathway is
-        presumed unresponsive and the controller SHUTS DOWN rather than escalating.
-
-        This makes the kill-shot sharper, not weaker: under blockade CADENCE not
-        only fails to restore, it DETECTS that it cannot and stops - which is the
-        behaviour you would want from anything intended to touch a patient.
+        It compares non-random stimulated and quiet frames, so confounding by
+        indication remains. This heuristic is not a validated statistical test
+        or a claim of real-world safety.
         """
         if self.aborted or self.n_stim < self.min_stim_trials:
             return
@@ -455,6 +364,10 @@ class AdaptiveCadence(Cadence):
         if self.aborted:
             self.prev_u = 0.0
             return 0.0                      # pathway unresponsive: stand down
+        if self.cumulative_dose >= self.max_cumulative_dose:
+            self.budget_exhausted = True
+            self.prev_u = 0.0
+            return 0.0                      # hard exposure budget reached
         if self.t <= self.calib_frames:
             self.prev_u = 0.0
             return 0.0                      # observe only: do not contaminate
@@ -464,6 +377,10 @@ class AdaptiveCadence(Cadence):
             self.prev_u = 0.0
             return 0.0
         u = super().act(state, L)
+        u = min(u, self.max_cumulative_dose - self.cumulative_dose)
+        self.cumulative_dose += u
+        if self.cumulative_dose >= self.max_cumulative_dose - 1e-12:
+            self.budget_exhausted = True
         self.prev_u = u
         return u
 
@@ -473,19 +390,20 @@ class AdaptiveCadence(Cadence):
 # --------------------------------------------------------------------------- #
 def simulate_closed_loop(policy, estimator, rng, n_frames=600,
                          b1_true=TRUE_B1_INTACT, b0_true=TRUE_B0,
-                         b0_shift=-1.5, entry_boost=0.30, kappa=KAPPA):
+                         b0_shift=-1.5, entry_boost=0.30, kappa=KAPPA,
+                         est_load_decay=LOAD_DECAY):
     """
     Run one closed-loop trace.
 
     The plant (true dynamics) is the same generative model as
-    generate_synthetic.py, with the disease modifications applied, plus the
+    generate_synthetic.py, with the challenge modifications applied, plus the
     control input entering through the feedback law. The controller sees ONLY the
     noisy calcium sample — never the true state, never the load.
 
-    `b0_shift` makes the diseased cell intrinsically worse at switching itself
-    off; `entry_boost` makes it fall into the high state more often.
+    `b0_shift` lowers the synthetic plant's switch-off propensity;
+    `entry_boost` makes it enter the high state more often.
     """
-    T_dis = disease_transitions(entry_boost)
+    T_dis = challenge_transitions(entry_boost)
     b0_eff = b0_true + b0_shift
 
     state = QUIESCENT
@@ -514,7 +432,9 @@ def simulate_closed_loop(policy, estimator, rng, n_frames=600,
             est_states[t] = s_hat
             # the controller maintains its OWN load estimate from its OWN state
             # belief - it has no access to the true load
-            est_load = est_load * LOAD_DECAY + (1.0 if s_hat == HIGH else 0.0)
+            est_load = (
+                est_load * est_load_decay + (1.0 if s_hat == HIGH else 0.0)
+            )
             u = policy.act(s_hat, est_load)
         else:
             u = 0.0
@@ -538,14 +458,14 @@ def simulate_closed_loop(policy, estimator, rng, n_frames=600,
 def evaluate(policy_factory, estimator, n_traces, seed, **sim_kw):
     """Run several traces and aggregate the two metrics that matter."""
     rng = np.random.default_rng(seed)
-    path_frac, costs, traces = [], [], []
+    high_frac, costs, traces = [], [], []
     for i in range(n_traces):
         out = simulate_closed_loop(policy_factory(), estimator, rng, **sim_kw)
-        path_frac.append(np.mean(out["true_state"] == HIGH))
+        high_frac.append(np.mean(out["true_state"] == HIGH))
         costs.append(out["action"].sum())
         traces.append(out)
-    return {"pathological_frac": float(np.mean(path_frac)),
-            "pathological_sd": float(np.std(path_frac)),
+    return {"high_state_frac": float(np.mean(high_frac)),
+            "high_state_sd": float(np.std(high_frac)),
             "cost": float(np.mean(costs)),
             "cost_sd": float(np.std(costs)),
             "traces": traces}
@@ -563,9 +483,9 @@ def plot_control_comparison(results, out_png, title):
     for ax, (name, res) in zip(axes, results.items()):
         tr = res["traces"][0]
         t = np.arange(len(tr["calcium"])) * DT
-        # shade true pathological periods
-        path = tr["true_state"] == HIGH
-        ax.fill_between(t, 0, 1, where=path, transform=ax.get_xaxis_transform(),
+        # Shade true SUSTAINED_HIGH periods in the synthetic plant.
+        high_mask = tr["true_state"] == HIGH
+        ax.fill_between(t, 0, 1, where=high_mask, transform=ax.get_xaxis_transform(),
                         color="#e07b7b", alpha=0.30, lw=0)
         ax.plot(t, tr["calcium"], color="black", lw=0.8)
         u = tr["action"]
@@ -575,7 +495,7 @@ def plot_control_comparison(results, out_png, title):
             ax2.set_ylabel("stim u", color="#1f77b4", fontsize=8)
             ax2.tick_params(axis="y", labelcolor="#1f77b4", labelsize=7)
         ax.set_ylabel("dF/F")
-        ax.set_title(f"{name}  —  pathological {res['pathological_frac']*100:.1f}% "
+        ax.set_title(f"{name}  —  high-state {res['high_state_frac']*100:.1f}% "
                      f"of time,  cost {res['cost']:.0f}", fontsize=10, loc="left")
     axes[-1].set_xlabel("time (s)")
     fig.suptitle(title)
@@ -585,7 +505,7 @@ def plot_control_comparison(results, out_png, title):
 
 
 def plot_bars(all_results, out_png):
-    """Pathological time and cost, side by side, across policies and conditions."""
+    """High-state occupancy and cost across policies and conditions."""
     conds = list(all_results.keys())
     policies = list(next(iter(all_results.values())).keys())
     x = np.arange(len(policies))
@@ -597,22 +517,22 @@ def plot_bars(all_results, out_png):
 
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.2))
     for k, cond in enumerate(conds):
-        vals = [all_results[cond][p]["pathological_frac"] * 100 for p in policies]
-        err = [all_results[cond][p]["pathological_sd"] * 100 for p in policies]
+        vals = [all_results[cond][p]["high_state_frac"] * 100 for p in policies]
+        err = [all_results[cond][p]["high_state_sd"] * 100 for p in policies]
         axes[0].bar(x + k * w, vals, w, yerr=err, capsize=3,
                     label=cond, color=colors[k % len(colors)])
         cvals = [all_results[cond][p]["cost"] for p in policies]
         axes[1].bar(x + k * w, cvals, w, label=cond, color=colors[k % len(colors)])
 
-    for ax, ylab, title in ((axes[0], "% time in SUSTAINED_HIGH", "Restoration"),
+    for ax, ylab, title in ((axes[0], "% time in SUSTAINED_HIGH", "High-state occupancy"),
                             (axes[1], "cumulative intervention cost", "Cost")):
         ax.set_xticks(x + w * (len(conds) - 1) / 2, short, fontsize=8)
         ax.set_ylabel(ylab)
         ax.set_title(title)
         ax.legend(fontsize=8, loc="upper right")
         ax.grid(axis="y", alpha=0.25)
-    fig.suptitle("CADENCE vs baselines: equal-or-better restoration at lower cost\n"
-                 "(and, under blocked feedback, correct failure)")
+    fig.suptitle("Synthetic controller benchmark\n"
+                 "occupancy and intervention cost under the assumed plant")
     fig.tight_layout()
     fig.savefig(out_png, dpi=150)
     plt.close(fig)
@@ -628,59 +548,88 @@ def main():
     ap.add_argument("--n_frames", type=int, default=600)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--figdir", default="figures")
-    # Laws recovered by Module 3. Defaults are the numbers actually measured.
-    ap.add_argument("--b0_learned", type=float, default=-2.703)
-    ap.add_argument("--b1_learned", type=float, default=0.832)
-    ap.add_argument("--b0_oracle", type=float, default=-3.187)
-    ap.add_argument("--b1_oracle", type=float, default=1.058)
-    # Disease-calibrated law. See DEPLOYMENT NOTE below for why this variant
-    # exists and why it is the scientifically correct way to run the controller.
-    ap.add_argument("--b0_disease", type=float, default=None,
-                    help="baseline propensity calibrated to the DISEASED cell; "
-                         "defaults to the true diseased b0 (an oracle calibration).")
-    ap.add_argument("--b1_disease", type=float, default=0.9)
+    ap.add_argument("--result_out", default="results/controller_benchmark.json",
+                    help="machine-readable synthetic benchmark output")
+    ap.add_argument("--estimates", default="results/feedback_estimates.json",
+                    help="machine-readable Module 3 output")
+    # Explicit values override the versioned Module 3 artifact.
+    ap.add_argument("--b0_learned", type=float, default=None)
+    ap.add_argument("--b1_learned", type=float, default=None)
+    ap.add_argument("--est_load_decay", type=float, default=None,
+                    help="controller exposure decay; defaults to Module 3's value")
+    # Oracle challenge calibration used only as a simulation reference arm.
+    ap.add_argument("--b0_challenge", "--b0_disease", dest="b0_challenge",
+                    type=float, default=None,
+                    help="reference baseline propensity for the shifted plant")
+    ap.add_argument("--b1_reference", "--b1_disease", dest="b1_reference",
+                    type=float, default=0.9)
     ap.add_argument("--b0_shift", type=float, default=-2.5,
-                    help="how much harder the diseased cell is at switching off.")
+                    help="synthetic decrease in baseline switch-off propensity")
     ap.add_argument("--entry_boost", type=float, default=0.40,
-                    help="extra P(OSCILLATORY -> SUSTAINED_HIGH) in disease.")
+                    help="synthetic increase in P(OSCILLATORY -> SUSTAINED_HIGH)")
     ap.add_argument("--open_loop_dose", type=float, default=1.0)
+    ap.add_argument("--adaptive_budget_fraction", type=float, default=0.30,
+                    help="hard adaptive-policy cumulative budget as a fraction "
+                         "of continuous open-loop exposure")
     args = ap.parse_args()
+
+    learned_b0 = learned_b1 = learned_decay = None
+    if args.estimates and os.path.exists(args.estimates):
+        with open(args.estimates, encoding="utf-8") as handle:
+            estimate_payload = json.load(handle)
+        intact = estimate_payload.get("causal", {}).get("intact", {})
+        if not intact:
+            # Backward compatibility with pre-v2 result artifacts.
+            intact = estimate_payload.get("inferred", {}).get("intact", {})
+        if intact:
+            learned_b0 = float(intact["b0"])
+            learned_b1 = float(intact["b1"])
+        learned_decay = float(estimate_payload["shared_decay"])
+        print(f"Loaded learned law from {args.estimates}: "
+              f"b0={learned_b0:+.3f}, b1={learned_b1:+.3f}, "
+              f"decay={learned_decay:.3f}")
+    else:
+        print("Module 3 estimate artifact not found; explicit learned-law "
+              "coefficients and decay are required.")
+    if args.b0_learned is not None:
+        learned_b0 = args.b0_learned
+    if args.b1_learned is not None:
+        learned_b1 = args.b1_learned
+    if args.est_load_decay is not None:
+        learned_decay = args.est_load_decay
+    if learned_b0 is None or learned_b1 is None or learned_decay is None:
+        ap.error(
+            "run Module 3 first, or provide --b0_learned, --b1_learned, "
+            "and --est_load_decay"
+        )
+    if not 0.0 < learned_decay <= 1.0:
+        ap.error("controller exposure decay must be in (0, 1]")
+    if not 0.0 < args.adaptive_budget_fraction <= 1.0:
+        ap.error("--adaptive_budget_fraction must be in (0, 1]")
 
     os.makedirs(args.figdir, exist_ok=True)
     est = OnlineStateEstimator(args.model)
     sim_kw = dict(n_frames=args.n_frames, b0_shift=args.b0_shift,
-                  entry_boost=args.entry_boost)
+                  entry_boost=args.entry_boost,
+                  est_load_decay=learned_decay)
+    adaptive_budget = (
+        args.adaptive_budget_fraction * args.open_loop_dose * args.n_frames
+    )
 
-    # DEPLOYMENT NOTE — why a disease-calibrated law is the correct way to run this
-    # -------------------------------------------------------------------------
-    # Modules 1-3 learn the feedback law from HEALTHY cells. Running that law
-    # unchanged on a diseased cell is a category error, and the results below show
-    # exactly why: the healthy law says "this cell will suppress itself shortly",
-    # so the controller stays silent - while the diseased cell, whose baseline
-    # propensity b0 is far lower, never actually recovers.
-    #
-    # The fix is not to abandon the learned law but to split it correctly:
-    #   - b1 (feedback GAIN) is a property of the signalling pathway. It is what
-    #     Module 3 recovers, and it is preserved in disease - the pathway still
-    #     works, the cell is just harder to switch off.
-    #   - b0 (baseline propensity) is cell- and condition-specific and must be
-    #     calibrated on the cell being treated, exactly as a clinician would
-    #     baseline a patient before setting stimulation parameters.
-    #
-    # The "disease-calibrated" variant below does that. It is an ORACLE
-    # calibration (we hand it the true diseased b0) and is labelled as such: it
-    # is an upper bound showing what CADENCE achieves when correctly baselined,
-    # not a claim that baselining is free. Estimating b0 online from the
-    # patient's own trace is the obvious next step and is listed as future work.
-    b0_disease = (args.b0_disease if args.b0_disease is not None
-                  else TRUE_B0 + args.b0_shift)
+    # MODEL-MISMATCH NOTE
+    # The plant below is deliberately shifted in b0 while b1 is preserved. That
+    # split is part of the simulated scenario, not a biological finding. The
+    # oracle arm receives the true shifted b0; the adaptive arm estimates it from
+    # unstimulated inferred transitions.
+    b0_challenge = (args.b0_challenge if args.b0_challenge is not None
+                    else TRUE_B0 + args.b0_shift)
 
     all_results = {}
 
     # ------------------------------------------------------------------ #
-    # CONDITION 1: diseased cell, feedback INTACT -> CADENCE should restore
+    # CONDITION 1: shifted synthetic plant with intact feedback
     # ------------------------------------------------------------------ #
-    print("=== DISEASE + INTACT FEEDBACK (can CADENCE restore, and cheaply?) ===")
+    print("=== SHIFTED SYNTHETIC PLANT + INTACT FEEDBACK ===")
     res = {}
     res["no control"] = evaluate(lambda: NoControl(), est, args.n_traces,
                                  args.seed, b1_true=TRUE_B1_INTACT, **sim_kw)
@@ -688,30 +637,29 @@ def main():
                                 args.n_traces, args.seed,
                                 b1_true=TRUE_B1_INTACT, **sim_kw)
     res["CADENCE (learned law)"] = evaluate(
-        lambda: Cadence(args.b0_learned, args.b1_learned), est,
+        lambda: Cadence(learned_b0, learned_b1), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_INTACT, **sim_kw)
-    res["CADENCE (healthy-law)"] = evaluate(
-        lambda: Cadence(args.b0_oracle, args.b1_oracle), est,
-        args.n_traces, args.seed, b1_true=TRUE_B1_INTACT, **sim_kw)
-    res["CADENCE (disease-calib)"] = evaluate(
-        lambda: Cadence(b0_disease, args.b1_disease), est,
+    res["CADENCE (plant-param ref)"] = evaluate(
+        lambda: Cadence(b0_challenge, args.b1_reference), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_INTACT, **sim_kw)
     res["CADENCE (self-calib)"] = evaluate(
-        lambda: AdaptiveCadence(args.b0_learned, args.b1_learned), est,
+        lambda: AdaptiveCadence(
+            learned_b0, learned_b1, max_cumulative_dose=adaptive_budget
+        ), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_INTACT, **sim_kw)
 
     for name, r in res.items():
-        print(f"  {name:<26} pathological {r['pathological_frac']*100:5.1f}%"
-              f" (sd {r['pathological_sd']*100:4.1f})   cost {r['cost']:8.1f}")
-    all_results["disease + intact feedback"] = res
+        print(f"  {name:<26} high-state {r['high_state_frac']*100:5.1f}%"
+              f" (sd {r['high_state_sd']*100:4.1f})   cost {r['cost']:8.1f}")
+    all_results["shifted synthetic plant + intact feedback"] = res
 
     # ------------------------------------------------------------------ #
-    # CONDITION 2: THE KILL-SHOT. Feedback blocked -> CADENCE must FAIL.
+    # CONDITION 2: structural blockade check. With u multiplied by b1, setting
+    # b1 near zero disables intervention by construction.
     # ------------------------------------------------------------------ #
-    print("\n=== KILL-SHOT: DISEASE + BLOCKED FEEDBACK (CADENCE must FAIL) ===")
-    print("  If CADENCE still restored rhythm here, it would mean the policy is")
-    print("  brute-forcing the system rather than working through the endogenous")
-    print("  law - which would invalidate the entire claim.")
+    print("\n=== STRUCTURAL CHECK: BLOCKED COEFFICIENT DISABLES CONTROL ===")
+    print("  This is expected from the assumed equation; it is a code/model")
+    print("  consistency check, not independent biological evidence.")
     res_b = {}
     res_b["no control"] = evaluate(lambda: NoControl(), est, args.n_traces,
                                    args.seed, b1_true=TRUE_B1_BLOCKED, **sim_kw)
@@ -719,64 +667,110 @@ def main():
                                   args.n_traces, args.seed,
                                   b1_true=TRUE_B1_BLOCKED, **sim_kw)
     res_b["CADENCE (learned law)"] = evaluate(
-        lambda: Cadence(args.b0_learned, args.b1_learned), est,
+        lambda: Cadence(learned_b0, learned_b1), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_BLOCKED, **sim_kw)
-    res_b["CADENCE (healthy-law)"] = evaluate(
-        lambda: Cadence(args.b0_oracle, args.b1_oracle), est,
-        args.n_traces, args.seed, b1_true=TRUE_B1_BLOCKED, **sim_kw)
-    res_b["CADENCE (disease-calib)"] = evaluate(
-        lambda: Cadence(b0_disease, args.b1_disease), est,
+    res_b["CADENCE (plant-param ref)"] = evaluate(
+        lambda: Cadence(b0_challenge, args.b1_reference), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_BLOCKED, **sim_kw)
     res_b["CADENCE (self-calib)"] = evaluate(
-        lambda: AdaptiveCadence(args.b0_learned, args.b1_learned), est,
+        lambda: AdaptiveCadence(
+            learned_b0, learned_b1, max_cumulative_dose=adaptive_budget
+        ), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_BLOCKED, **sim_kw)
 
     for name, r in res_b.items():
-        print(f"  {name:<26} pathological {r['pathological_frac']*100:5.1f}%"
-              f" (sd {r['pathological_sd']*100:4.1f})   cost {r['cost']:8.1f}")
-    all_results["disease + blocked feedback"] = res_b
+        print(f"  {name:<26} high-state {r['high_state_frac']*100:5.1f}%"
+              f" (sd {r['high_state_sd']*100:4.1f})   cost {r['cost']:8.1f}")
+    all_results["shifted synthetic plant + blocked feedback"] = res_b
+
+    result_payload = {
+        "schema_version": 3,
+        "analysis_scope": (
+            "synthetic policy stress test; not evidence of biological efficacy or safety"
+        ),
+        "seed": int(args.seed),
+        "n_traces": int(args.n_traces),
+        "n_frames_per_trace": int(args.n_frames),
+        "assumptions": {
+            "intervention_equation": "sigmoid(b0 + b1 * (L + kappa * u))",
+            "true_b1_intact": float(TRUE_B1_INTACT),
+            "true_b1_blocked": float(TRUE_B1_BLOCKED),
+            "b0_shift": float(args.b0_shift),
+            "entry_boost": float(args.entry_boost),
+            "plant_load_decay": float(LOAD_DECAY),
+            "controller_exposure_decay": float(learned_decay),
+            "intervention_cost_units": "arbitrary",
+            "open_loop_dose_per_frame": float(args.open_loop_dose),
+            "cadence_peak_dose_limit": float(CADENCE_U_MAX),
+            "adaptive_cumulative_budget": float(adaptive_budget),
+            "adaptive_budget_fraction_of_open_loop": float(
+                args.adaptive_budget_fraction
+            ),
+        },
+        "learned_law": {"b0": float(learned_b0), "b1": float(learned_b1)},
+        "scenarios": {
+            scenario: {
+                policy: {
+                    metric: float(value)
+                    for metric, value in metrics.items()
+                    if metric != "traces"
+                }
+                for policy, metrics in policies.items()
+            }
+            for scenario, policies in all_results.items()
+        },
+    }
+    result_dir = os.path.dirname(args.result_out)
+    if result_dir:
+        os.makedirs(result_dir, exist_ok=True)
+    with open(args.result_out, "w", encoding="utf-8") as handle:
+        json.dump(result_payload, handle, indent=2)
+        handle.write("\n")
+    print(f"\nwrote {args.result_out}")
 
     # ------------------------------------------------------------------ #
     # Verdicts
     # ------------------------------------------------------------------ #
-    print("\n=== VERDICTS ===")
-    nc = res["no control"]["pathological_frac"]
+    print("\n=== DESCRIPTIVE CHECKS ===")
+    print("  Costs are not efficacy-matched, units are arbitrary, peak doses differ,")
+    print("  and the adaptive policy has an explicit cumulative budget.")
+    nc = res["no control"]["high_state_frac"]
     ol = res["open-loop"]
-    for tag in ("CADENCE (learned law)", "CADENCE (healthy-law)",
-                "CADENCE (disease-calib)", "CADENCE (self-calib)"):
+    for tag in ("CADENCE (learned law)", "CADENCE (plant-param ref)",
+                "CADENCE (self-calib)"):
         cd = res[tag]
-        restored = cd["pathological_frac"] < nc
+        restored = cd["high_state_frac"] < nc
         cheaper = cd["cost"] < ol["cost"]
-        as_good = cd["pathological_frac"] <= ol["pathological_frac"] * 1.10
+        as_good = cd["high_state_frac"] <= ol["high_state_frac"] * 1.10
         print(f"  [{tag}]")
-        print(f"    reduces pathological time vs no-control : "
+        print(f"    reduces high-state time vs no-control   : "
               f"{'YES' if restored else 'NO'} "
-              f"({nc*100:.1f}% -> {cd['pathological_frac']*100:.1f}%)")
-        print(f"    restoration within 10% of open-loop      : "
+              f"({nc*100:.1f}% -> {cd['high_state_frac']*100:.1f}%)")
+        print(f"    occupancy within 10% of open-loop        : "
               f"{'YES' if as_good else 'NO'} "
-              f"({ol['pathological_frac']*100:.1f}% open-loop)")
-        print(f"    cheaper than open-loop                   : "
+              f"({ol['high_state_frac']*100:.1f}% open-loop)")
+        print(f"    lower cumulative cost than open-loop     : "
               f"{'YES' if cheaper else 'NO'} "
               f"({ol['cost']:.0f} -> {cd['cost']:.0f}, "
               f"{(1 - cd['cost']/max(ol['cost'],1e-9))*100:.0f}% saving)")
 
-    print("\n  [KILL-SHOT]")
-    nc_b = res_b["no control"]["pathological_frac"]
-    for tag in ("CADENCE (learned law)", "CADENCE (healthy-law)",
-                "CADENCE (disease-calib)", "CADENCE (self-calib)"):
+    print("\n  [STRUCTURAL BLOCKADE CHECK]")
+    nc_b = res_b["no control"]["high_state_frac"]
+    for tag in ("CADENCE (learned law)", "CADENCE (plant-param ref)",
+                "CADENCE (self-calib)"):
         cd_b = res_b[tag]
-        failed = cd_b["pathological_frac"] >= nc_b * 0.90
-        print(f"    {tag}: pathological {nc_b*100:.1f}% -> "
-              f"{cd_b['pathological_frac']*100:.1f}%  "
-              f"-> {'FAILS to restore (CORRECT)' if failed else 'STILL RESTORES (RED FLAG)'}")
+        failed = cd_b["high_state_frac"] >= nc_b * 0.90
+        print(f"    {tag}: high-state {nc_b*100:.1f}% -> "
+              f"{cd_b['high_state_frac']*100:.1f}%  "
+              f"-> {'fails as constructed' if failed else 'unexpected restoration'}")
 
     # ------------------------------------------------------------------ #
     plot_control_comparison(res, os.path.join(args.figdir, "control_intact.png"),
-                            "Closed-loop control, diseased cell with INTACT feedback\n"
-                            "(red shading = true pathological SUSTAINED_HIGH)")
+                            "Closed-loop control, shifted plant with INTACT feedback\n"
+                            "(red shading = true SUSTAINED_HIGH)")
     plot_control_comparison(res_b, os.path.join(args.figdir, "control_blocked.png"),
-                            "KILL-SHOT: feedback blocked - CADENCE cannot restore\n"
-                            "(red shading = true pathological SUSTAINED_HIGH)")
+                            "Structural check: b1 near zero disables control by construction\n"
+                            "(red shading = true SUSTAINED_HIGH)")
     plot_bars(all_results, os.path.join(args.figdir, "control_summary.png"))
     print(f"\nwrote figures to {args.figdir}/")
     print("Module 4 complete. Next: run_all.py + tests/test_pipeline.py.")

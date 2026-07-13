@@ -268,12 +268,15 @@ class KineticHMM:
         self._rebuild_map()
 
     # ---------------------------------------------------------------- #
-    def save(self, path):
+    def save(self, path, *, fit_trace_count=None):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         np.savez(path, model_type=np.array("kinetic"), mu=self.mu, sd=self.sd,
                  tau=np.array(self.tau), A=self.A, pi=self.pi,
                  nc=np.array(self.nc),
-                 c_lo=np.array(self.cgrid[0]), c_hi=np.array(self.cgrid[-1]))
+                 c_lo=np.array(self.cgrid[0]), c_hi=np.array(self.cgrid[-1]),
+                 fit_trace_count=np.array(
+                     -1 if fit_trace_count is None else int(fit_trace_count)
+                 ))
 
     @staticmethod
     def load(path):
@@ -393,7 +396,7 @@ def main():
         print(f"    {name:<16} mu={model.mu[r]:6.3f}  sd={model.sd[r]:5.3f}")
     print(f"  fitted tau = {model.tau:.2f}")
 
-    model.save(args.out)
+    model.save(args.out, fit_trace_count=len(seqs))
     print(f"\nSaved kinetic model -> {args.out}")
 
 

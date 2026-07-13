@@ -1,0 +1,91 @@
+{
+  "schema_version": 3,
+  "analysis_scope": "synthetic policy stress test; not evidence of biological efficacy or safety",
+  "seed": 0,
+  "n_traces": 6,
+  "n_frames_per_trace": 600,
+  "assumptions": {
+    "intervention_equation": "sigmoid(b0 + b1 * (L + kappa * u))",
+    "true_b1_intact": 0.9,
+    "true_b1_blocked": 0.02,
+    "b0_shift": -2.5,
+    "entry_boost": 0.4,
+    "plant_load_decay": 0.92,
+    "controller_exposure_decay": 0.9,
+    "intervention_cost_units": "arbitrary",
+    "open_loop_dose_per_frame": 1.0,
+    "cadence_peak_dose_limit": 8.0,
+    "adaptive_cumulative_budget": 180.0,
+    "adaptive_budget_fraction_of_open_loop": 0.3
+  },
+  "learned_law": {
+    "b0": -1.8998203669839853,
+    "b1": 0.694218983181974
+  },
+  "scenarios": {
+    "shifted synthetic plant + intact feedback": {
+      "no control": {
+        "high_state_frac": 0.24888888888888894,
+        "high_state_sd": 0.02458294098870844,
+        "cost": 0.0,
+        "cost_sd": 0.0
+      },
+      "open-loop": {
+        "high_state_frac": 0.21333333333333335,
+        "high_state_sd": 0.018358568490953672,
+        "cost": 600.0,
+        "cost_sd": 0.0
+      },
+      "CADENCE (learned law)": {
+        "high_state_frac": 0.24750000000000003,
+        "high_state_sd": 0.02443339396687945,
+        "cost": 4.23849422547515,
+        "cost_sd": 0.9469635421010634
+      },
+      "CADENCE (plant-param ref)": {
+        "high_state_frac": 0.1661111111111111,
+        "high_state_sd": 0.013528661846539908,
+        "cost": 211.90849225928878,
+        "cost_sd": 11.258005830681578
+      },
+      "CADENCE (self-calib)": {
+        "high_state_frac": 0.23555555555555555,
+        "high_state_sd": 0.014709113660970817,
+        "cost": 59.080838648909776,
+        "cost_sd": 13.654913375314846
+      }
+    },
+    "shifted synthetic plant + blocked feedback": {
+      "no control": {
+        "high_state_frac": 0.8544444444444443,
+        "high_state_sd": 0.04108107010519146,
+        "cost": 0.0,
+        "cost_sd": 0.0
+      },
+      "open-loop": {
+        "high_state_frac": 0.848611111111111,
+        "high_state_sd": 0.04587035541799127,
+        "cost": 600.0,
+        "cost_sd": 0.0
+      },
+      "CADENCE (learned law)": {
+        "high_state_frac": 0.8544444444444443,
+        "high_state_sd": 0.04108107010519146,
+        "cost": 0.8101543842568265,
+        "cost_sd": 0.2502605570222669
+      },
+      "CADENCE (plant-param ref)": {
+        "high_state_frac": 0.8544444444444443,
+        "high_state_sd": 0.04108107010519146,
+        "cost": 29.954192821152343,
+        "cost_sd": 8.55683277524537
+      },
+      "CADENCE (self-calib)": {
+        "high_state_frac": 0.8544444444444443,
+        "high_state_sd": 0.04108107010519146,
+        "cost": 180.0,
+        "cost_sd": 0.0
+      }
+    }
+  }
+}

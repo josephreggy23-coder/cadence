@@ -1,8 +1,8 @@
 """
 recover_states.py  —  CADENCE pipeline, Module 2
 ================================================
-Viterbi-decode the hidden states from the fitted HMM, map the anonymous state
-indices to BIOLOGICAL labels, and then MEASURE how well we recovered the truth.
+Decode hidden states from the fitted model, map anonymous state indices to the
+simulator's labels, and then MEASURE how well the method recovers ground truth.
 
 WHY THIS MODULE IS THE CREDIBILITY GATE
 ---------------------------------------
@@ -15,23 +15,19 @@ explicitly and report it warts-and-all.
 
 THE THREE STEPS
 ---------------
-1) DECODE. Viterbi finds the single most likely *sequence* of hidden states given
-   the whole trace. We use Viterbi rather than frame-wise posterior argmax
-   because we care about the temporal grammar (dwell times, ordered transitions
-   like HIGH -> REFRACTORY); Viterbi returns a globally consistent path, not a
-   sequence of independent per-frame guesses that can flicker between states.
+1) DECODE. The kinetic model writes both smoothed marginal MAP labels from its
+   forward-backward posterior and causal filtered labels using only observations
+   available through the current frame. Module 3 uses the causal labels because
+   Module 4 must operate online. The Gaussian-HMM ablation uses Viterbi.
 
-2) LABEL. The HMM's state indices are arbitrary (EM could number them any way).
-   We assign biological names by ORDERING THE EMISSION MEANS. This uses only an
-   a-priori physiological fact — the four regimes sit at known relative calcium
-   levels:
+2) LABEL. State indices are arbitrary (EM could number them any way). We assign
+   the simulator's names by ORDERING THE EMISSION MEANS. This uses only the
+   synthetic model's fixed relative calcium ordering:
         QUIESCENT  <  REFRACTORY  <  OSCILLATORY  <  SUSTAINED_HIGH
    (quiescent baseline is lowest; the refractory "off" state is suppressed but
    slightly above baseline; oscillatory rides higher; sustained-high is highest).
-   IMPORTANT HONESTY POINT: this ordering is knowledge a wet-lab experimenter
-   also has without labels. We do NOT use `true_state` to choose the mapping —
-   that would make the accuracy score circular. `true_state` is touched ONLY to
-   score the result, after the mapping is already fixed.
+   We do NOT use `true_state` to choose the mapping. On unlabeled biological data,
+   these names would require independent experimental validation.
 
 3) SCORE. Accuracy + a full confusion matrix + per-state precision/recall,
    computed by hand with numpy (staying inside the numpy/scipy/pandas/matplotlib
@@ -51,9 +47,9 @@ and structured, and we show exactly where it fails.
 
 OUTPUT
 ------
-  data/decoded_<condition>.csv   decoded states for Module 3 (feedback-law fit)
+  data/decoded_<condition>.csv   smoothed + causal states for Module 3
   figures/state_recovery_trace.png     example trace, true vs inferred
-  figures/state_recovery_confusion.png confusion matrices, both conditions
+  figures/state_recovery_confusion.png held-out intact and blocked matrices
 """
 
 import argparse
@@ -135,8 +131,10 @@ def build_label_map(model):
 
 def decode_condition(csv_path, model, hmm_to_true, feature_mode):
     """
-    Viterbi-decode every trace in a condition file and attach the inferred,
-    biologically-labelled state. Returns the augmented DataFrame.
+    Decode every trace and attach the inferred simulator-state label.
+
+    The kinetic path uses smoothed marginal MAP; the Gaussian-HMM ablation uses
+    Viterbi. Returns the augmented DataFrame.
 
     NOTE: decoding is done PER TRACE. Feeding all traces as one long sequence
     would let the model hallucinate a transition from the end of one cell into
@@ -144,6 +142,7 @@ def decode_condition(csv_path, model, hmm_to_true, feature_mode):
     """
     df = pd.read_csv(csv_path)
     inferred = np.empty(len(df), dtype=int)
+    causal = np.empty(len(df), dtype=int) if feature_mode == "kinetic" else None
 
     for _, g in df.groupby("trace_id", sort=True):
         g = g.sort_values("time_s")
@@ -151,6 +150,11 @@ def decode_condition(csv_path, model, hmm_to_true, feature_mode):
             # The kinetic model marginalises over the sensor level and returns
             # biological indices directly - no emission-rank mapping needed here.
             inferred[g.index.to_numpy()] = model.decode(g["calcium"].to_numpy())
+            from kinetic_hmm import KineticFilter
+            online_filter = KineticFilter(model)
+            causal[g.index.to_numpy()] = [
+                online_filter.step(value) for value in g["calcium"].to_numpy()
+            ]
         else:
             X = make_features(g["calcium"].to_numpy(), feature_mode)
             hmm_states = model.predict(X)          # Viterbi
@@ -158,6 +162,9 @@ def decode_condition(csv_path, model, hmm_to_true, feature_mode):
 
     df["inferred_state"] = inferred
     df["inferred_label"] = [STATE_NAMES[s] for s in inferred]
+    if causal is not None:
+        df["causal_state"] = causal
+        df["causal_label"] = [STATE_NAMES[s] for s in causal]
     return df
 
 
@@ -171,15 +178,15 @@ def confusion_matrix(true, pred, n_classes=4):
     return counts
 
 
-def recovery_report(df, condition_name):
+def recovery_report(df, condition_name, state_col="inferred_state"):
     """Print accuracy, per-state recall/precision, and return the confusion matrix."""
     true = df["true_state"].to_numpy()
-    pred = df["inferred_state"].to_numpy()
+    pred = df[state_col].to_numpy()
 
     cm = confusion_matrix(true, pred)
     accuracy = np.trace(cm) / cm.sum()
 
-    print(f"\n--- state recovery: {condition_name} ---")
+    print(f"\n--- state recovery: {condition_name} [{state_col}] ---")
     print(f"  overall frame accuracy: {accuracy * 100:.1f}%  "
           f"(chance = 25%; majority-class = {cm.sum(axis=1).max() / cm.sum() * 100:.1f}%)")
     print(f"  {'state':<16}{'recall':>9}{'precision':>11}{'n_true':>10}")
@@ -240,9 +247,10 @@ def plot_example_trace(df, out_png, trace_id=0, max_frames=400):
 
 def plot_confusions(cms, names, out_png):
     """Row-normalised confusion matrices (rows = true state) side by side."""
-    fig, axes = plt.subplots(1, len(cms), figsize=(5.6 * len(cms), 4.8))
-    if len(cms) == 1:
-        axes = [axes]
+    ncols = min(2, len(cms))
+    nrows = int(np.ceil(len(cms) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5.6 * ncols, 4.8 * nrows))
+    axes = np.atleast_1d(axes).ravel()
     for ax, cm, name in zip(axes, cms, names):
         norm = cm / np.maximum(cm.sum(axis=1, keepdims=True), 1)
         im = ax.imshow(norm, cmap="Blues", vmin=0, vmax=1)
@@ -256,6 +264,8 @@ def plot_confusions(cms, names, out_png):
                 ax.text(j, i, f"{norm[i, j]:.2f}", ha="center", va="center",
                         fontsize=8, color="white" if norm[i, j] > 0.5 else "black")
         fig.colorbar(im, ax=ax, fraction=0.046)
+    for ax in axes[len(cms):]:
+        ax.remove()
     fig.suptitle("Hidden-state recovery vs ground truth (row-normalised)")
     fig.tight_layout()
     fig.savefig(out_png, dpi=150)
@@ -279,6 +289,11 @@ def main():
     print(f"Loading fitted model from {args.model} ...")
     model, feature_mode = load_fitted_model(args.model)
     print(f"  estimator (read from model file): {feature_mode}")
+    with np.load(args.model, allow_pickle=False) as model_data:
+        fit_trace_count = (
+            int(model_data["fit_trace_count"])
+            if "fit_trace_count" in model_data else -1
+        )
 
     if feature_mode == "kinetic":
         hmm_to_true = None
@@ -298,9 +313,42 @@ def main():
     cms, names = [], []
     for cond, path in (("intact", args.intact), ("blocked", args.blocked)):
         df = decode_condition(path, model, hmm_to_true, feature_mode)
-        cm, _ = recovery_report(df, cond)
+        if cond == "intact" and fit_trace_count > 0:
+            df["model_split"] = np.where(
+                df["trace_id"] < fit_trace_count, "fit", "held_out"
+            )
+            fit_df = df[df["model_split"] == "fit"]
+            held_out_df = df[df["model_split"] == "held_out"]
+            if held_out_df.empty:
+                raise ValueError(
+                    "no held-out intact traces remain; reduce --fit_traces"
+                )
+            recovery_report(fit_df, "intact fit-set diagnostic")
+            cm, _ = recovery_report(held_out_df, "intact held-out")
+            causal_cm = None
+            if "causal_state" in held_out_df:
+                causal_cm, _ = recovery_report(
+                    held_out_df, "intact held-out causal", "causal_state"
+                )
+            scoring_df = held_out_df
+            display_name = "intact held-out"
+        else:
+            # The kinetic model is fit only on intact traces. The blocked arm is
+            # therefore out of fit, while still sharing the simulator family.
+            df["model_split"] = "condition_transfer"
+            cm, _ = recovery_report(df, f"{cond} (not used for fitting)")
+            causal_cm = None
+            if "causal_state" in df:
+                causal_cm, _ = recovery_report(
+                    df, f"{cond} causal (not used for fitting)", "causal_state"
+                )
+            scoring_df = df
+            display_name = f"{cond} not fit"
         cms.append(cm)
-        names.append(cond)
+        names.append(f"{display_name}: offline smoothed")
+        if causal_cm is not None:
+            cms.append(causal_cm)
+            names.append(f"{display_name}: causal filter")
 
         out_csv = os.path.join(args.outdir, f"decoded_{cond}.csv")
         df.to_csv(out_csv, index=False)
@@ -308,7 +356,8 @@ def main():
 
         if cond == "intact":
             trace_png = os.path.join(args.figdir, "state_recovery_trace.png")
-            plot_example_trace(df, trace_png)
+            example_trace_id = int(scoring_df["trace_id"].min())
+            plot_example_trace(scoring_df, trace_png, trace_id=example_trace_id)
             print(f"  wrote {trace_png}")
 
     conf_png = os.path.join(args.figdir, "state_recovery_confusion.png")

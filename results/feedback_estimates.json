@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "analysis_scope": "synthetic estimator benchmark; not evidence of a biochemical mechanism",
+  "shared_decay": 0.9,
+  "diagnostics": {
+    "blocked_causal_null_bias": true,
+    "interpretation": "causal hard-state decoding can bias the near-null blocked slope; the intact-minus-blocked contrast remains the primary synthetic result"
+  },
+  "contrasts": {
+    "causal": {
+      "b1_intact_minus_blocked": 0.7245625039112964,
+      "ci95": [
+        0.5803403426795173,
+        0.8640153740061267
+      ],
+      "bootstrap_draws": 150
+    },
+    "oracle": {
+      "b1_intact_minus_blocked": 1.016439556222576,
+      "ci95": [
+        0.832880302854179,
+        1.1600665643696275
+      ],
+      "bootstrap_draws": 150
+    }
+  },
+  "causal": {
+    "intact": {
+      "b0": -1.8998203669839853,
+      "b1": 0.694218983181974,
+      "b1_ci95": [
+        0.5578277045541785,
+        0.8474373094448296
+      ],
+      "n_high_frames": 1120,
+      "n_switch_events": 462
+    },
+    "blocked": {
+      "b0": -1.8966654717553275,
+      "b1": -0.030343520729322473,
+      "b1_ci95": [
+        -0.05797590415449034,
+        -0.004742756432800318
+      ],
+      "n_high_frames": 7405,
+      "n_switch_events": 813
+    }
+  },
+  "oracle": {
+    "intact": {
+      "b0": -3.2780606909336165,
+      "b1": 1.043944584547883,
+      "b1_ci95": [
+        0.87851331767327,
+        1.1919764878807049
+      ]
+    },
+    "blocked": {
+      "b0": -3.143274337589314,
+      "b1": 0.027505028325306928,
+      "b1_ci95": [
+        -0.006704895257879977,
+        0.058264924190485005
+      ]
+    }
+  }
+}

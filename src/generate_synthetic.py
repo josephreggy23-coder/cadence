@@ -1,21 +1,20 @@
 """
 generate_synthetic.py
 ----------------------
-Ground-truth simulator for astrocyte-like glial calcium dynamics.
+Ground-truth simulator for astrocyte-inspired calcium dynamics.
 
 WHY THIS EXISTS
-The project's central claim is that glial calcium is governed by a hidden,
-load-dependent feedback law: the longer/harder the system sits in a high-calcium
-state, the more likely it is to switch itself OFF (into a refractory/suppressed
-state). To prove our inference pipeline can recover such a law from real data,
-we first generate data from a KNOWN law and show recovery. This is validation,
-not a result: it demonstrates the estimator works before we trust it on wet-lab data.
+The simulator deliberately encodes a hidden, dwell-dependent exit law: the
+longer the process remains in a high state, the more likely it is to switch into
+a refractory state. Recovering a KNOWN law is a software and model benchmark. It
+does not show that the same law exists in astrocytes or that it can be recovered
+from an unlabeled biological recording.
 
 MODEL
 Four hidden states:
     0 = QUIESCENT      (low baseline calcium)
     1 = OSCILLATORY    (baseline waves)
-    2 = SUSTAINED_HIGH (pathological / activated elevation)
+    2 = SUSTAINED_HIGH (synthetic elevated state)
     3 = REFRACTORY     (self-suppressed, the feedback "off" state)
 
 Emissions: continuous calcium fluorescence (dF/F-like), state-specific mean +
@@ -27,8 +26,8 @@ rises with an accumulated "calcium load" variable L that integrates recent time
 spent in the high state. This makes the process semi-Markov / load-dependent:
     P(high -> refractory | L) = sigmoid(beta0 + beta1 * L)
 with beta1 > 0. beta1 is the quantitative signature of negative feedback.
-A control condition (feedback "blocked") sets beta1 ~ 0, flattening the law -
-this mirrors the pharmacological kill-shot experiment.
+A comparison condition sets beta1 near zero, flattening the law. This is a
+fixed simulation contrast, not a pharmacological experiment.
 
 USAGE
     python generate_synthetic.py --condition intact  --n_traces 60 --out data/intact.csv
@@ -61,9 +60,12 @@ BASE_T = np.array([
 ])
 
 def high_row(p_off):
-    """Build the SUSTAINED_HIGH transition row given the dynamic off-probability."""
-    p_stay = max(0.0, 1.0 - p_off - 0.02)   # small leak to OSC
-    return np.array([0.00, 0.02, p_stay, p_off])
+    """Build a valid SUSTAINED_HIGH row for any proposed off-probability."""
+    leak_to_osc = 0.02
+    p_off = float(np.clip(p_off, 0.0, 1.0 - leak_to_osc))
+    p_stay = max(0.0, 1.0 - p_off - leak_to_osc)
+    row = np.array([0.00, leak_to_osc, p_stay, p_off])
+    return row / row.sum()
 
 def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
