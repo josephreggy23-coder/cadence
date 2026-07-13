@@ -33,9 +33,13 @@ htmlcov/
 .nox/
 
 # ---- Data-science artifacts ----
+# Public source recordings are downloaded locally and never redistributed.
+data/real/
 # Regenerable synthetic data (reproducible from generate_synthetic.py).
 # Comment these out if you want to version the CSVs.
 data/*.csv
+data/intact.json
+data/blocked.json
 *.parquet
 *.h5
 *.hdf5
@@ -63,6 +67,7 @@ desktop.ini
 *~
 .idea/
 .vscode/
+.claude/settings.local.json
 
 # ---- Environment / secrets ----
 .env

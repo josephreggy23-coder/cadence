@@ -1,9 +1,10 @@
 """
 run_all.py  —  CADENCE pipeline, Module 5
 =========================================
-One command reproduces the entire project from nothing: synthetic data, fitted
-model, decoded states, recovered feedback law, controller benchmarks, and every
-publication figure.
+One command reproduces the synthetic benchmark and, when the versioned compact
+H1R export is present, the real-data secondary analysis: generated traces,
+fitted model, held-out state recovery, hazard-law recovery, policy stress tests,
+machine-readable results, and figures.
 
     python src/run_all.py                 # full run (model-order sweep included)
     python src/run_all.py --quick         # fast rerun, narrower sweep
@@ -68,11 +69,9 @@ def plot_transition_matrices(decoded_paths, out_png):
     """
     Transition-matrix heatmaps, intact vs blocked, built from the INFERRED states.
 
-    This is the figure that shows the feedback difference as raw structure rather
-    than as a fitted coefficient: in the intact condition the SUSTAINED_HIGH row
-    carries real mass into REFRACTORY (the cell switches itself off), whereas in
-    the blocked condition that mass collapses onto SUSTAINED_HIGH itself (the
-    cell gets stuck). It is the same story `b1` tells, visible without any model.
+    This summarizes decoded transitions without fitting the hazard regression.
+    It remains a synthetic, model-dependent diagnostic because the labels come
+    from the fitted state estimator.
     """
     fig, axes = plt.subplots(1, len(decoded_paths), figsize=(5.8 * len(decoded_paths), 5.0))
     if len(decoded_paths) == 1:
@@ -80,6 +79,8 @@ def plot_transition_matrices(decoded_paths, out_png):
 
     for ax, (cond, path) in zip(axes, decoded_paths.items()):
         df = pd.read_csv(path)
+        if "model_split" in df and (df["model_split"] == "held_out").any():
+            df = df[df["model_split"] != "fit"]
         # concatenate per-trace so no transition straddles two cells
         mats = []
         for _, g in df.groupby("trace_id", sort=True):
@@ -128,7 +129,7 @@ def main():
     args = ap.parse_args()
 
     py = sys.executable
-    for d in ("data", "models", "figures"):
+    for d in ("data", "models", "figures", "results"):
         os.makedirs(os.path.join(ROOT, d), exist_ok=True)
 
     t_start = time.time()
@@ -139,8 +140,9 @@ def main():
         if args.skip_existing and os.path.exists(os.path.join(ROOT, out)):
             print(f"[skip] {out} exists")
             continue
+        condition_seed = args.seed + (0 if cond == "intact" else 1)
         run([py, "src/generate_synthetic.py", "--condition", cond,
-             "--n_traces", str(args.n_traces), "--seed", str(args.seed),
+             "--n_traces", str(args.n_traces), "--seed", str(condition_seed),
              "--out", out], f"generate {cond} data")
 
     # -- 1. fit the state estimator ------------------------------------- #
@@ -183,7 +185,15 @@ def main():
     run([py, "src/controller.py", "--seed", str(args.seed),
          "--model", "models/kinetic_model.npz",
          "--n_traces", str(args.control_traces)],
-        "Module 4: CADENCE controller vs baselines + kill-shot")
+        "Module 4: synthetic controller stress test")
+
+    # -- 5. public H1R astrocyte secondary analysis -------------------- #
+    h1r_export = os.path.join(ROOT, "data", "processed", "h1r_astrocytes_v1.csv.gz")
+    if os.path.exists(h1r_export):
+        run([py, "src/analyze_h1r_astrocytes.py"],
+            "Module 5: reproduce H1R astrocyte secondary analysis")
+    else:
+        print("[skip] compact H1R export not present; see docs/real_data.md")
 
     # ------------------------------------------------------------------ #
     print(f"\n{'=' * 74}")
@@ -193,7 +203,7 @@ def main():
     for f in sorted(os.listdir(os.path.join(ROOT, "figures"))):
         if f.endswith(".png"):
             print(f"  - {f}")
-    print("\nTo verify the scientific claims still hold:")
+    print("\nTo verify the documented synthetic benchmark checks:")
     print("  python tests/test_pipeline.py")
 
 

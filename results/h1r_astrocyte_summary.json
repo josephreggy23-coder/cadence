@@ -1,0 +1,611 @@
+{
+  "analysis_schema_version": "h1r-secondary-analysis-v3",
+  "cohorts": {
+    "ne_only_2023": {
+      "by_genotype": {
+        "KO": {
+          "roi_count": 47,
+          "slice_count": 5,
+          "slice_mean_delta_auc": {
+            "mean": 1.5961006749146434,
+            "median": 1.2286019902606704,
+            "n": 5,
+            "q1": 1.2053702875577876,
+            "q3": 1.2578005267627417,
+            "sd": 0.8597150531464406
+          }
+        },
+        "WT": {
+          "roi_count": 24,
+          "slice_count": 5,
+          "slice_mean_delta_auc": {
+            "mean": 1.2149497719361644,
+            "median": 0.917991567278414,
+            "n": 5,
+            "q1": 0.9086390895983253,
+            "q3": 1.139778477896928,
+            "sd": 0.6542894919597024
+          }
+        }
+      },
+      "label": "NE only (2023, jRGECO)",
+      "paired_ko_minus_wt": {
+        "mean": 0.3811509029784789,
+        "median": 0.3491614371644164,
+        "n": 5,
+        "q1": 0.2873787202793736,
+        "q3": 0.47897463279328023,
+        "sd": 0.2768817573748273
+      },
+      "paired_slice_count": 5,
+      "paired_slice_ids": [
+        "AVG_062123_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+        "AVG_062123_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+        "AVG_062223_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+        "AVG_062223_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+        "AVG_062223_slice3_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+      ],
+      "paired_values": [
+        {
+          "ko_mean_delta_auc": 1.2053702875577876,
+          "ko_minus_wt": 0.2873787202793736,
+          "slice_id": "AVG_062123_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+          "wt_mean_delta_auc": 0.917991567278414
+        },
+        {
+          "ko_mean_delta_auc": 3.1325654711994337,
+          "ko_minus_wt": 0.7738531037596692,
+          "slice_id": "AVG_062123_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+          "wt_mean_delta_auc": 2.3587123674397645
+        },
+        {
+          "ko_mean_delta_auc": 1.2578005267627417,
+          "ko_minus_wt": 0.3491614371644164,
+          "slice_id": "AVG_062223_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+          "wt_mean_delta_auc": 0.9086390895983253
+        },
+        {
+          "ko_mean_delta_auc": 1.1561650987925831,
+          "ko_minus_wt": 0.016386620895655124,
+          "slice_id": "AVG_062223_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+          "wt_mean_delta_auc": 1.139778477896928
+        },
+        {
+          "ko_mean_delta_auc": 1.2286019902606704,
+          "ko_minus_wt": 0.47897463279328023,
+          "slice_id": "AVG_062223_slice3_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2",
+          "wt_mean_delta_auc": 0.7496273574673902
+        }
+      ]
+    },
+    "post_low_histamine_2025": {
+      "by_genotype": {
+        "KO": {
+          "roi_count": 33,
+          "slice_count": 7,
+          "slice_mean_delta_auc": {
+            "mean": 0.6677320196142025,
+            "median": 0.5057592366004425,
+            "n": 7,
+            "q1": 0.44973071978742407,
+            "q3": 1.0288330233418992,
+            "sd": 0.4383373603806312
+          }
+        },
+        "WT": {
+          "roi_count": 43,
+          "slice_count": 8,
+          "slice_mean_delta_auc": {
+            "mean": 0.3420093608795657,
+            "median": 0.42104688251717237,
+            "n": 8,
+            "q1": 0.34262756425697044,
+            "q3": 0.43234056047924496,
+            "sd": 0.1630542092483247
+          }
+        }
+      },
+      "label": "NE after low HA (2025, GCaMP)",
+      "paired_ko_minus_wt": {
+        "mean": 0.3334749880816264,
+        "median": 0.3240759784980395,
+        "n": 7,
+        "q1": 0.025658992402465747,
+        "q3": 0.5916458182414556,
+        "sd": 0.3303525243472773
+      },
+      "paired_slice_count": 7,
+      "paired_slice_ids": [
+        "AVG_032225_slice1_20X_zm1_GCaMP",
+        "AVG_032225_slice2_20X_zm1_GCaMP",
+        "AVG_040725_Slice1_H1Rflox_GCaMP_CreRFP",
+        "AVG_040725_Slice2_H1Rflox_GCaMP_CreRFP",
+        "AVG_040725_Slice3_H1Rflox_GCaMP_CreRFP",
+        "AVG_040725_Slice4_H1Rflox_GCaMP_CreRFP",
+        "AVG_041025_Slice4_H1Rflox_GCaMP_CreRFP"
+      ],
+      "paired_values": [
+        {
+          "ko_mean_delta_auc": 0.5057592366004425,
+          "ko_minus_wt": 0.3240759784980395,
+          "slice_id": "AVG_032225_slice1_20X_zm1_GCaMP",
+          "wt_mean_delta_auc": 0.18168325810240307
+        },
+        {
+          "ko_mean_delta_auc": 0.43492898942196545,
+          "ko_minus_wt": 0.0035799033131359015,
+          "slice_id": "AVG_032225_slice2_20X_zm1_GCaMP",
+          "wt_mean_delta_auc": 0.43134908610882955
+        },
+        {
+          "ko_mean_delta_auc": 1.2109849002534787,
+          "ko_minus_wt": 0.7756699166629877,
+          "slice_id": "AVG_040725_Slice1_H1Rflox_GCaMP_CreRFP",
+          "wt_mean_delta_auc": 0.4353149835904911
+        },
+        {
+          "ko_mean_delta_auc": 0.9070239546629535,
+          "ko_minus_wt": 0.4817245582896959,
+          "slice_id": "AVG_040725_Slice2_H1Rflox_GCaMP_CreRFP",
+          "wt_mean_delta_auc": 0.4252993963732576
+        },
+        {
+          "ko_mean_delta_auc": 0.0002525141868494551,
+          "ko_minus_wt": -3.059987748498232e-05,
+          "slice_id": "AVG_040725_Slice3_H1Rflox_GCaMP_CreRFP",
+          "wt_mean_delta_auc": 0.0002831140643344374
+        },
+        {
+          "ko_mean_delta_auc": 1.150642092020845,
+          "ko_minus_wt": 0.7015670781932152,
+          "slice_id": "AVG_040725_Slice4_H1Rflox_GCaMP_CreRFP",
+          "wt_mean_delta_auc": 0.44907501382762993
+        },
+        {
+          "ko_mean_delta_auc": 0.4645324501528827,
+          "ko_minus_wt": 0.04773808149179559,
+          "slice_id": "AVG_041025_Slice4_H1Rflox_GCaMP_CreRFP",
+          "wt_mean_delta_auc": 0.4167943686610871
+        }
+      ]
+    }
+  },
+  "counts": {
+    "analyzed_roi_count": 147,
+    "analyzed_slice_count": 13,
+    "excluded_roi_count": 0
+  },
+  "derived_input": {
+    "path": "data/processed/h1r_astrocytes_v1.csv.gz",
+    "row_count": 67595,
+    "sha256": "4172cdb2eb5d3fa3b7b53648e6676a02b0314b47afcc73b81f03936ff5c2a7f6",
+    "source_files": [
+      {
+        "cohort": "post_low_histamine_2025",
+        "doi": "10.5061/dryad.2280gb64x",
+        "dryad_file_id": 4342954,
+        "dryad_version_id": 394734,
+        "file_name": "Fig5_H1RKO_NE_postLowHA.mat",
+        "sha256": "d39c8e8453996d5f3abdc42eed0b4ea4b6485b5e142719d4128f9683972621eb"
+      },
+      {
+        "cohort": "ne_only_2023",
+        "doi": "10.5061/dryad.2280gb64x",
+        "dryad_file_id": 4342955,
+        "dryad_version_id": 394734,
+        "file_name": "Fig5_H1RKO_NE.mat",
+        "sha256": "45c7836bcafda6369a8addf436c2838c04ab61c53d3881fe52416821fe5e8116"
+      }
+    ]
+  },
+  "exclusions": [],
+  "limitations": [
+    "Animal IDs are absent from the deposited tables, so slices cannot be mapped to animals.",
+    "All comparisons are descriptive secondary analyses; slices and ROIs are not treated as animals.",
+    "The two cohorts use different sensors/protocol contexts and are summarized separately, not pooled.",
+    "The nominal 30-second trapezoidal AUC uses 21 samples and spans 28.17 seconds at 0.71 Hz, matching the source notebook.",
+    "A deposited slice with a markedly different raw fluorescence scale is flagged and retained rather than silently excluded.",
+    "The stricter within-ROI noise-standardized sensitivity is less slice-consistent than the common-scale amplitude result."
+  ],
+  "method": {
+    "auc": "post minus pre trapezoidal AUC; nominal 30 s on each side",
+    "auc_effective_duration_s": 28.169014084507044,
+    "auc_samples_per_window": 21,
+    "baseline_default": "median from onset-70 s to onset-10 s",
+    "baseline_fallback_by_cohort": {
+      "ne_only_2023": "median from onset-40 s to onset-10 s",
+      "post_low_histamine_2025": "median from onset-30 s to onset-10 s"
+    },
+    "comparison": "paired WT versus KO within slices that contain both genotypes",
+    "fluorescence_offset": 100000.0,
+    "primary_unit": "slice/genotype mean after aggregating ROIs",
+    "sampling_rate_hz": 0.71
+  },
+  "offset_free_robustness": {
+    "cohorts": {
+      "ne_only_2023": {
+        "offset_free_raw_median_shift": {
+          "effect": {
+            "mean": 1578.721999999999,
+            "median": 1468.4399999999987,
+            "n": 5,
+            "q1": 968.2299999999977,
+            "q3": 1514.6349999999984,
+            "sd": 1224.6389478260523
+          },
+          "paired_slice_count": 5,
+          "paired_values": [
+            {
+              "ko_minus_wt": 342.96500000000015,
+              "slice_id": "AVG_062123_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 3599.34,
+              "slice_id": "AVG_062123_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 968.2299999999977,
+              "slice_id": "AVG_062223_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 1468.4399999999987,
+              "slice_id": "AVG_062223_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 1514.6349999999984,
+              "slice_id": "AVG_062223_slice3_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            }
+          ],
+          "positive_slice_count": 5
+        },
+        "paired_common_scale_effect": {
+          "effect": {
+            "mean": 11.662997042295986,
+            "median": 7.484576808526508,
+            "n": 5,
+            "q1": 6.464042245353278,
+            "q3": 12.693184811557272,
+            "sd": 9.503219750013004
+          },
+          "paired_slice_count": 5,
+          "paired_values": [
+            {
+              "ko_minus_wt": 3.986329886677499,
+              "slice_id": "AVG_062123_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 27.68685145936537,
+              "slice_id": "AVG_062123_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 6.464042245353278,
+              "slice_id": "AVG_062223_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 12.693184811557272,
+              "slice_id": "AVG_062223_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 7.484576808526508,
+              "slice_id": "AVG_062223_slice3_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            }
+          ],
+          "positive_slice_count": 5
+        },
+        "specification_grid": {
+          "common_scale_mean_effect_range": [
+            5.822854221664366,
+            13.610053702541574
+          ],
+          "common_scale_positive_slice_count_range": [
+            4,
+            5
+          ],
+          "specification_count": 36,
+          "within_roi_z_mean_effect_range": [
+            2.5052213036354756,
+            9.24569063905879
+          ],
+          "within_roi_z_positive_slice_count_range": [
+            2,
+            4
+          ]
+        },
+        "within_roi_robust_z_sensitivity": {
+          "effect": {
+            "mean": 3.9017647158432807,
+            "median": 2.685220806251749,
+            "n": 5,
+            "q1": -3.258450812459916,
+            "q3": 10.652783987975287,
+            "sd": 11.301078588066007
+          },
+          "excluding_flagged_slices": {
+            "effect": {
+              "mean": 3.9017647158432807,
+              "median": 2.685220806251749,
+              "n": 5,
+              "q1": -3.258450812459916,
+              "q3": 10.652783987975287,
+              "sd": 11.301078588066007
+            },
+            "paired_slice_count": 5,
+            "paired_values": [
+              {
+                "ko_minus_wt": -3.258450812459916,
+                "slice_id": "AVG_062123_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+              },
+              {
+                "ko_minus_wt": -9.6243168150244,
+                "slice_id": "AVG_062123_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+              },
+              {
+                "ko_minus_wt": 2.685220806251749,
+                "slice_id": "AVG_062223_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+              },
+              {
+                "ko_minus_wt": 19.053586412473685,
+                "slice_id": "AVG_062223_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+              },
+              {
+                "ko_minus_wt": 10.652783987975287,
+                "slice_id": "AVG_062223_slice3_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+              }
+            ],
+            "positive_slice_count": 3
+          },
+          "leave_one_slice_out_mean_min": 0.11380929168567988,
+          "paired_slice_count": 5,
+          "paired_values": [
+            {
+              "ko_minus_wt": -3.258450812459916,
+              "slice_id": "AVG_062123_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": -9.6243168150244,
+              "slice_id": "AVG_062123_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 2.685220806251749,
+              "slice_id": "AVG_062223_slice1_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 19.053586412473685,
+              "slice_id": "AVG_062223_slice2_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            },
+            {
+              "ko_minus_wt": 10.652783987975287,
+              "slice_id": "AVG_062223_slice3_20X_zm1_jRGECO_CreGfp_H1RfloxedHOM_jRGECO_HiLo_Ave2"
+            }
+          ],
+          "positive_slice_count": 3
+        }
+      },
+      "post_low_histamine_2025": {
+        "offset_free_raw_median_shift": {
+          "effect": {
+            "mean": 558.6957142857145,
+            "median": 234.90999999999985,
+            "n": 7,
+            "q1": 89.02000000000102,
+            "q3": 1088.9474999999993,
+            "sd": 876.8014802794514
+          },
+          "paired_slice_count": 7,
+          "paired_values": [
+            {
+              "ko_minus_wt": 502.15000000000146,
+              "slice_id": "AVG_032225_slice1_20X_zm1_GCaMP"
+            },
+            {
+              "ko_minus_wt": -518.8199999999997,
+              "slice_id": "AVG_032225_slice2_20X_zm1_GCaMP"
+            },
+            {
+              "ko_minus_wt": 1675.7449999999972,
+              "slice_id": "AVG_040725_Slice1_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 234.90999999999985,
+              "slice_id": "AVG_040725_Slice2_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 0.03000000000000025,
+              "slice_id": "AVG_040725_Slice3_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 1838.8450000000012,
+              "slice_id": "AVG_040725_Slice4_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 178.01000000000204,
+              "slice_id": "AVG_041025_Slice4_H1Rflox_GCaMP_CreRFP"
+            }
+          ],
+          "positive_slice_count": 6
+        },
+        "paired_common_scale_effect": {
+          "effect": {
+            "mean": 3.558746297117529,
+            "median": 1.0164362536439118,
+            "n": 7,
+            "q1": 0.5769067137058301,
+            "q3": 3.6551282589136935,
+            "sd": 6.432021667774814
+          },
+          "paired_slice_count": 7,
+          "paired_values": [
+            {
+              "ko_minus_wt": 1.2009947604137134,
+              "slice_id": "AVG_032225_slice1_20X_zm1_GCaMP"
+            },
+            {
+              "ko_minus_wt": -1.6979102175237721,
+              "slice_id": "AVG_032225_slice2_20X_zm1_GCaMP"
+            },
+            {
+              "ko_minus_wt": 6.109261757413673,
+              "slice_id": "AVG_040725_Slice1_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 1.0164362536439118,
+              "slice_id": "AVG_040725_Slice2_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 0.31130342745074024,
+              "slice_id": "AVG_040725_Slice3_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 17.128628098463516,
+              "slice_id": "AVG_040725_Slice4_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 0.84250999996092,
+              "slice_id": "AVG_041025_Slice4_H1Rflox_GCaMP_CreRFP"
+            }
+          ],
+          "positive_slice_count": 6
+        },
+        "specification_grid": {
+          "common_scale_mean_effect_range": [
+            2.723819325691981,
+            7.023826382867513
+          ],
+          "common_scale_positive_slice_count_range": [
+            4,
+            6
+          ],
+          "specification_count": 36,
+          "within_roi_z_mean_effect_range": [
+            4.005609735047925,
+            9.256279275160917
+          ],
+          "within_roi_z_positive_slice_count_range": [
+            3,
+            6
+          ]
+        },
+        "within_roi_robust_z_sensitivity": {
+          "effect": {
+            "mean": 5.458939036412609,
+            "median": 1.2680052548237382,
+            "n": 7,
+            "q1": 0.0391942335408586,
+            "q3": 3.6783243983314584,
+            "sd": 11.6108304471093
+          },
+          "excluding_flagged_slices": {
+            "effect": {
+              "mean": 6.334356367376848,
+              "median": 1.7261729981533371,
+              "n": 6,
+              "q1": 0.22096637604684033,
+              "q3": 4.42531622675572,
+              "sd": 12.463397377026176
+            },
+            "paired_slice_count": 6,
+            "paired_values": [
+              {
+                "ko_minus_wt": 1.2680052548237382,
+                "slice_id": "AVG_032225_slice1_20X_zm1_GCaMP"
+              },
+              {
+                "ko_minus_wt": -1.8113332059850262,
+                "slice_id": "AVG_032225_slice2_20X_zm1_GCaMP"
+              },
+              {
+                "ko_minus_wt": 5.172308055179981,
+                "slice_id": "AVG_040725_Slice1_H1Rflox_GCaMP_CreRFP"
+              },
+              {
+                "ko_minus_wt": 2.184340741482936,
+                "slice_id": "AVG_040725_Slice2_H1Rflox_GCaMP_CreRFP"
+              },
+              {
+                "ko_minus_wt": 31.320863942304918,
+                "slice_id": "AVG_040725_Slice4_H1Rflox_GCaMP_CreRFP"
+              },
+              {
+                "ko_minus_wt": -0.12804658354545895,
+                "slice_id": "AVG_041025_Slice4_H1Rflox_GCaMP_CreRFP"
+              }
+            ],
+            "positive_slice_count": 4
+          },
+          "leave_one_slice_out_mean_min": 1.1486182187638911,
+          "paired_slice_count": 7,
+          "paired_values": [
+            {
+              "ko_minus_wt": 1.2680052548237382,
+              "slice_id": "AVG_032225_slice1_20X_zm1_GCaMP"
+            },
+            {
+              "ko_minus_wt": -1.8113332059850262,
+              "slice_id": "AVG_032225_slice2_20X_zm1_GCaMP"
+            },
+            {
+              "ko_minus_wt": 5.172308055179981,
+              "slice_id": "AVG_040725_Slice1_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 2.184340741482936,
+              "slice_id": "AVG_040725_Slice2_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 0.20643505062717615,
+              "slice_id": "AVG_040725_Slice3_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": 31.320863942304918,
+              "slice_id": "AVG_040725_Slice4_H1Rflox_GCaMP_CreRFP"
+            },
+            {
+              "ko_minus_wt": -0.12804658354545895,
+              "slice_id": "AVG_041025_Slice4_H1Rflox_GCaMP_CreRFP"
+            }
+          ],
+          "positive_slice_count": 5
+        }
+      }
+    },
+    "common_scale_definition": "paired median-ROI KO-WT raw response divided by the median baseline MAD scale pooled across both genotypes in that slice",
+    "default_windows": {
+      "baseline": "onset-70 s to onset-10 s",
+      "response": "median post 0-30 s minus median pre 30-0 s",
+      "robust_scale": "1.4826 times baseline MAD"
+    },
+    "specification_grid": {
+      "baseline_start_s": [
+        40,
+        60,
+        70
+      ],
+      "response_window_s": [
+        15,
+        30,
+        45
+      ],
+      "roi_to_slice_aggregation": [
+        "mean",
+        "median"
+      ],
+      "temporal_summary": [
+        "mean",
+        "median"
+      ],
+      "total_specifications_per_cohort": 36
+    },
+    "status": "alternative metric on the same recordings; exploratory sensitivity analysis declared during repository audit; not preregistered or an independent replication"
+  },
+  "qc_flags": [
+    {
+      "action": "retained to reproduce the deposited analysis; interpret cautiously",
+      "code": "raw_fluorescence_scale_outlier",
+      "cohort": "post_low_histamine_2025",
+      "cohort_median_absolute_raw_baseline": 30568.955,
+      "relative_absolute_scale": 0.0002715172958971908,
+      "slice_id": "AVG_040725_Slice3_H1Rflox_GCaMP_CreRFP",
+      "slice_raw_baseline_median": 8.30000000000291
+    }
+  ]
+}

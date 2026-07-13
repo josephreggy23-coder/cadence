@@ -1,0 +1,25 @@
+{
+  "schema_version": "h1r-astrocytes-v1",
+  "dataset_doi": "10.5061/dryad.2280gb64x",
+  "dryad_version_id": 394734,
+  "sampling_rate_hz": 0.71,
+  "derived_file": "h1r_astrocytes_v1.csv.gz",
+  "row_count": 67595,
+  "column_count": 20,
+  "onset_convention": "onset_index is retained as the zero-based array index used by the authors' accompanying Python notebook; source_frame preserves the first MATLAB table column separately.",
+  "hierarchy": "samples nested in ROIs; ROIs nested in slices; animal IDs unavailable",
+  "sources": [
+    {
+      "file_name": "Fig5_H1RKO_NE.mat",
+      "file_id": 4342955,
+      "sha256": "45c7836bcafda6369a8addf436c2838c04ab61c53d3881fe52416821fe5e8116",
+      "cohort": "ne_only_2023"
+    },
+    {
+      "file_name": "Fig5_H1RKO_NE_postLowHA.mat",
+      "file_id": 4342954,
+      "sha256": "d39c8e8453996d5f3abdc42eed0b4ea4b6485b5e142719d4128f9683972621eb",
+      "cohort": "post_low_histamine_2025"
+    }
+  ]
+}
