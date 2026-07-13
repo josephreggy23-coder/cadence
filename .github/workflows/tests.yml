@@ -20,6 +20,8 @@ jobs:
           cache-dependency-path: requirements.txt
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.txt
+      - name: Check competition-abstract length
+        run: python scripts/check_abstract_length.py
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 
