@@ -1,4 +1,4 @@
-# CADENCE: Restoring Glial Calcium Rhythm Through a Learned Endogenous Feedback Law
+# CADENCE: Sensor-Aware State Inference and Assumption-Aware Control
 
 Dysregulated astrocytic Ca2+ signaling is a key driver of high-burden CNS
 disorders, including epilepsy, stroke, and neurodegeneration, yet existing

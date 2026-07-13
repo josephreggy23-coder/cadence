@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use CADENCE, cite this repository and the source datasets."
+title: "CADENCE: a sensor-aware calcium-state and control benchmark"
+type: software
+authors:
+  - family-names: David
+    given-names: Joseph
+repository-code: "https://github.com/josephreggy23-coder/cadence"
+url: "https://github.com/josephreggy23-coder/cadence"
+version: 0.3.0
+date-released: 2026-07-14
+keywords:
+  - astrocyte
+  - calcium imaging
+  - state-space model
+  - closed-loop control
+  - reproducible research

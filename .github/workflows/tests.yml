@@ -7,12 +7,42 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MPLBACKEND: Agg
+      PYTHONHASHSEED: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: requirements.txt
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.txt
-      - run: python -m unittest discover -s tests -v
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      # test_pipeline.py protects versioned benchmark invariants, but uses
+      # plain test functions rather than unittest.TestCase. Generate only the
+      # model and decoded-state artifacts it requires, then invoke it directly.
+      - name: Generate deterministic scientific-test artifacts
+        run: |
+          python src/generate_synthetic.py --condition intact --n_traces 30 --seed 0 --out data/intact.csv
+          python src/generate_synthetic.py --condition blocked --n_traces 30 --seed 1 --out data/blocked.csv
+          python src/kinetic_hmm.py --fit_traces 10 --out models/kinetic_model.npz
+          python src/recover_states.py --model models/kinetic_model.npz
+          python src/estimate_feedback_law.py --n_boot 60
+          python src/controller.py --n_traces 6
+
+      - name: Reproduce public astrocyte analysis
+        run: python src/analyze_h1r_astrocytes.py
+
+      - name: Verify versioned numeric artifacts are current
+        run: |
+          git diff --exit-code -- results/feedback_estimates.json results/controller_benchmark.json
+          git diff --exit-code -- results/h1r_astrocyte_summary.json results/h1r_orthogonal_specifications.csv
+          git diff --exit-code -- results/h1r_roi_delta_auc.csv results/h1r_slice_delta_auc.csv
+
+      - name: Run benchmark invariant tests
+        run: python tests/test_pipeline.py
