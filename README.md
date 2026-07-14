@@ -28,6 +28,7 @@ controller respond to the intended feedback pathway rather than a shortcut.
 - Deterministic synthetic trace generation for intact and feedback-blocked conditions
 - Reusable `generate_dataset(...)` Python API for later fitting and validation stages
 - Dataset-contract validation before output is written, protecting downstream fitting code
+- Validated `load_dataset(...)` API for safely reusing generated CSV files
 - Configurable trace count, duration, random seed, and load retention
 - CSV output with condition, trace identifier, time, calcium signal, hidden state, and accumulated load
 - Console summary of the hidden-state occupancy for a quick sanity check

@@ -1,12 +1,15 @@
 import sys
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from generate_synthetic import (
     generate_dataset,
+    load_dataset,
     simulation_metadata,
     state_occupancy,
     simulate_trace,
@@ -54,6 +57,14 @@ class SimulateTraceTests(unittest.TestCase):
         dataset.loc[0, "true_state"] = 99
         with self.assertRaisesRegex(ValueError, "hidden-state"):
             validate_dataset(dataset)
+
+    def test_dataset_loader_validates_a_saved_csv(self):
+        dataset = generate_dataset("blocked", n_traces=1, n_frames=2, seed=3)
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "dataset.csv"
+            dataset.to_csv(path, index=False)
+            restored = load_dataset(path)
+        pd.testing.assert_frame_equal(restored, dataset, check_exact=False)
 
 
 if __name__ == "__main__":

@@ -156,6 +156,13 @@ def validate_dataset(dataset):
         raise ValueError("dataset load values must be non-negative")
 
 
+def load_dataset(path):
+    """Load a generated CSV and verify it follows the CADENCE data contract."""
+    dataset = pd.read_csv(path)
+    validate_dataset(dataset)
+    return dataset
+
+
 def simulation_metadata(condition, n_traces, n_frames, seed, load_decay):
     """Describe the parameters used to generate a synthetic dataset."""
     beta1 = 0.9 if condition == "intact" else 0.02
