@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from generate_synthetic import (
     generate_dataset,
     load_dataset,
