@@ -47,6 +47,27 @@ Each CSV is accompanied by a JSON manifest (for example, `data/intact.json`)
 that records the random seed, feedback parameters, duration, and load-decay
 setting used to generate it. Use `--metadata-out` to choose a different path.
 
+## Real zebrafish calcium data
+
+CADENCE now includes a loader for a real `Danio rerio` calcium-imaging asset
+from [DANDI:001076](https://dandiarchive.org/dandiset/001076):
+`sub-nan_ses-20230123T192927_obj-17bhudf_ophys.nwb`. The selected public asset
+contains a fluorescence response matrix with 1,416 frames and 667 ROIs.
+
+```python
+from real_data import load_zebrafish_recording
+
+recording = load_zebrafish_recording(
+    "data/real/dandi-001076-zebrafish-ophys.nwb",
+    max_rois=64,
+)
+```
+
+The file is ignored by Git because it is source data, not project code. This
+asset is an open, single-subject DANDI draft and is suitable for exploratory
+ingestion work only. It does not yet validate CADENCE's control hypothesis;
+the synthetic system remains the ground-truth benchmark for estimator tests.
+
 For sensitivity experiments, `--load-decay` controls how quickly accumulated
 high-calcium load fades between frames. It defaults to `0.92`; values must be
 between `0` and `1`.
