@@ -39,6 +39,7 @@ data/*.csv
 *.parquet
 *.h5
 *.hdf5
+*.nwb
 *.npy
 *.npz
 *.pkl
