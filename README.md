@@ -72,6 +72,10 @@ asset is an open, single-subject DANDI draft and is suitable for exploratory
 ingestion work only. It does not yet validate CADENCE's control hypothesis;
 the synthetic system remains the ground-truth benchmark for estimator tests.
 
+By default, the loader honors the dataset's segmentation QC and retains 610 of
+667 ROIs marked `Accepted`; `max_rois` is applied only after that filtering.
+Set `accepted_only=False` only when explicitly auditing rejected segmentations.
+
 For sensitivity experiments, `--load-decay` controls how quickly accumulated
 high-calcium load fades between frames. It defaults to `0.92`; values must be
 between `0` and `1`.

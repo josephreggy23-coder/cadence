@@ -13,6 +13,7 @@ ZEBRAFISH_DANDISET = "001076"
 ZEBRAFISH_ASSET_ID = "9676d05a-7655-41ec-aebd-271c334c0649"
 ZEBRAFISH_ASSET_PATH = "sub-nan/sub-nan_ses-20230123T192927_obj-17bhudf_ophys.nwb"
 FLUORESCENCE_PATH = "processing/ophys/Fluorescence/RoiResponseSeries"
+SEGMENTATION_PATH = "processing/ophys/ImageSegmentation/PlaneSegmentation"
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class RealCalciumRecording:
 
     fluorescence: np.ndarray
     time_s: np.ndarray
+    roi_ids: np.ndarray
     species: str
     source_dandiset: str = ZEBRAFISH_DANDISET
     source_asset_id: str = ZEBRAFISH_ASSET_ID
@@ -39,7 +41,12 @@ def summarize_recording(recording: RealCalciumRecording) -> dict[str, float | in
     }
 
 
-def load_zebrafish_recording(path: str | Path, *, max_rois: int | None = None) -> RealCalciumRecording:
+def load_zebrafish_recording(
+    path: str | Path,
+    *,
+    accepted_only: bool = True,
+    max_rois: int | None = None,
+) -> RealCalciumRecording:
     """Load fluorescence traces from the selected DANDI zebrafish NWB asset.
 
     The DANDI asset uses NWB 2.6.0-alpha metadata that is incompatible with the
@@ -54,12 +61,28 @@ def load_zebrafish_recording(path: str | Path, *, max_rois: int | None = None) -
         fluorescence = np.asarray(series["data"], dtype=np.float32)
         if fluorescence.ndim != 2:
             raise ValueError("fluorescence data must have shape frames x ROIs")
+
+        segmentation = file[SEGMENTATION_PATH]
+        roi_rows = np.asarray(series["rois"], dtype=int)
+        roi_ids = np.asarray(segmentation["id"])[roi_rows]
+        if fluorescence.shape[1] != roi_rows.size:
+            raise ValueError("ROI references must match fluorescence columns")
+        if accepted_only:
+            accepted = np.asarray(segmentation["Accepted"], dtype=bool)[roi_rows]
+            fluorescence = fluorescence[:, accepted]
+            roi_ids = roi_ids[accepted]
         if max_rois is not None:
             fluorescence = fluorescence[:, :max_rois]
+            roi_ids = roi_ids[:max_rois]
         rate = float(series["starting_time"].attrs["rate"])
         if rate <= 0:
             raise ValueError("fluorescence sampling rate must be positive")
         species = file["general/subject/species"][()].decode("utf-8")
 
     time_s = np.arange(fluorescence.shape[0], dtype=np.float32) / rate
-    return RealCalciumRecording(fluorescence=fluorescence, time_s=time_s, species=species)
+    return RealCalciumRecording(
+        fluorescence=fluorescence,
+        time_s=time_s,
+        roi_ids=roi_ids,
+        species=species,
+    )
