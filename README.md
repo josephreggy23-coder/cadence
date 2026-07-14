@@ -55,12 +55,13 @@ from [DANDI:001076](https://dandiarchive.org/dandiset/001076):
 contains a fluorescence response matrix with 1,416 frames and 667 ROIs.
 
 ```python
-from real_data import load_zebrafish_recording
+from real_data import compute_dff, load_zebrafish_recording
 
 recording = load_zebrafish_recording(
     "data/real/dandi-001076-zebrafish-ophys.nwb",
     max_rois=64,
 )
+normalized = compute_dff(recording, baseline_percentile=20)
 ```
 
 `summarize_recording(recording)` returns label-free quality-control metrics
@@ -75,6 +76,9 @@ the synthetic system remains the ground-truth benchmark for estimator tests.
 By default, the loader honors the dataset's segmentation QC and retains 610 of
 667 ROIs marked `Accepted`; `max_rois` is applied only after that filtering.
 Set `accepted_only=False` only when explicitly auditing rejected segmentations.
+`compute_dff` then uses each retained ROI's 20th-percentile fluorescence as
+`F0` and returns `(F - F0) / F0`; it does not apply rolling detrending that
+could erase sustained elevations relevant to CADENCE.
 
 For sensitivity experiments, `--load-decay` controls how quickly accumulated
 high-calcium load fades between frames. It defaults to `0.92`; values must be

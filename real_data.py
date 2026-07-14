@@ -28,6 +28,43 @@ class RealCalciumRecording:
     source_asset_id: str = ZEBRAFISH_ASSET_ID
 
 
+@dataclass(frozen=True)
+class DffRecording:
+    """Per-ROI fluorescence normalized to a documented baseline."""
+
+    dff: np.ndarray
+    baseline_fluorescence: np.ndarray
+    time_s: np.ndarray
+    roi_ids: np.ndarray
+    species: str
+
+
+def compute_dff(
+    recording: RealCalciumRecording,
+    *,
+    baseline_percentile: float = 20.0,
+) -> DffRecording:
+    """Normalize each ROI as (F - F0) / F0 using a fixed percentile F0."""
+    if not 0.0 < baseline_percentile < 100.0:
+        raise ValueError("baseline_percentile must be between 0 and 100")
+    fluorescence = np.asarray(recording.fluorescence, dtype=np.float64)
+    if fluorescence.ndim != 2 or fluorescence.size == 0:
+        raise ValueError("fluorescence must be a non-empty frames x ROIs array")
+    if not np.isfinite(fluorescence).all():
+        raise ValueError("fluorescence must contain only finite values")
+    baseline = np.percentile(fluorescence, baseline_percentile, axis=0)
+    if np.any(baseline <= 0):
+        raise ValueError("each ROI must have a strictly positive fluorescence baseline")
+    dff = ((fluorescence - baseline) / baseline).astype(np.float32)
+    return DffRecording(
+        dff=dff,
+        baseline_fluorescence=baseline.astype(np.float32),
+        time_s=recording.time_s,
+        roi_ids=recording.roi_ids,
+        species=recording.species,
+    )
+
+
 def summarize_recording(recording: RealCalciumRecording) -> dict[str, float | int | str]:
     """Return transparent, label-free quality-control metrics for a recording."""
     fluorescence = recording.fluorescence

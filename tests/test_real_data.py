@@ -8,8 +8,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from real_data import (
+    DffRecording,
     FLUORESCENCE_PATH,
+    RealCalciumRecording,
     SEGMENTATION_PATH,
+    compute_dff,
     load_zebrafish_recording,
     summarize_recording,
 )
@@ -57,3 +60,26 @@ class RealDataTests(unittest.TestCase):
             recording = load_zebrafish_recording(path, max_rois=1)
 
         np.testing.assert_array_equal(recording.roi_ids, [20])
+
+    def test_dff_uses_a_per_roi_percentile_baseline(self):
+        recording = RealCalciumRecording(
+            fluorescence=np.array([[2.0, 4.0], [4.0, 8.0], [6.0, 12.0]]),
+            time_s=np.array([0.0, 1.0, 2.0]),
+            roi_ids=np.array([4, 9]),
+            species="Danio rerio",
+        )
+        normalized = compute_dff(recording, baseline_percentile=50)
+        self.assertIsInstance(normalized, DffRecording)
+        np.testing.assert_allclose(normalized.baseline_fluorescence, [4.0, 8.0])
+        np.testing.assert_allclose(normalized.dff, [[-0.5, -0.5], [0.0, 0.0], [0.5, 0.5]])
+        np.testing.assert_array_equal(normalized.roi_ids, recording.roi_ids)
+
+    def test_dff_rejects_nonfinite_fluorescence(self):
+        recording = RealCalciumRecording(
+            fluorescence=np.array([[1.0], [np.nan]]),
+            time_s=np.array([0.0, 1.0]),
+            roi_ids=np.array([1]),
+            species="Danio rerio",
+        )
+        with self.assertRaisesRegex(ValueError, "finite"):
+            compute_dff(recording)
