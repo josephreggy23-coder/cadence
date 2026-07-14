@@ -26,6 +26,19 @@ class RealCalciumRecording:
     source_asset_id: str = ZEBRAFISH_ASSET_ID
 
 
+def summarize_recording(recording: RealCalciumRecording) -> dict[str, float | int | str]:
+    """Return transparent, label-free quality-control metrics for a recording."""
+    fluorescence = recording.fluorescence
+    return {
+        "species": recording.species,
+        "n_frames": int(fluorescence.shape[0]),
+        "n_rois": int(fluorescence.shape[1]),
+        "duration_s": float(recording.time_s[-1]),
+        "mean_fluorescence": float(fluorescence.mean()),
+        "median_roi_std": float(np.median(fluorescence.std(axis=0))),
+    }
+
+
 def load_zebrafish_recording(path: str | Path, *, max_rois: int | None = None) -> RealCalciumRecording:
     """Load fluorescence traces from the selected DANDI zebrafish NWB asset.
 

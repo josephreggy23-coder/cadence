@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from real_data import FLUORESCENCE_PATH, load_zebrafish_recording
+from real_data import FLUORESCENCE_PATH, load_zebrafish_recording, summarize_recording
 
 
 class RealDataTests(unittest.TestCase):
@@ -26,3 +26,6 @@ class RealDataTests(unittest.TestCase):
         self.assertEqual(recording.fluorescence.shape, (4, 2))
         np.testing.assert_allclose(recording.time_s, [0.0, 0.5, 1.0, 1.5])
         self.assertEqual(recording.species, "Danio rerio")
+        summary = summarize_recording(recording)
+        self.assertEqual(summary["n_rois"], 2)
+        self.assertEqual(summary["duration_s"], 1.5)

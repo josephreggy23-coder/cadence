@@ -63,6 +63,10 @@ recording = load_zebrafish_recording(
 )
 ```
 
+`summarize_recording(recording)` returns label-free quality-control metrics
+(duration, ROI count, fluorescence level, and per-ROI variability) before any
+model fitting is attempted.
+
 The file is ignored by Git because it is source data, not project code. This
 asset is an open, single-subject DANDI draft and is suitable for exploratory
 ingestion work only. It does not yet validate CADENCE's control hypothesis;
