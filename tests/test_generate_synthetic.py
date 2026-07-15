@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from generate_synthetic import generate_dataset, state_occupancy, simulate_trace
+from generate_synthetic import generate_dataset, simulation_metadata, state_occupancy, simulate_trace
 
 
 class SimulateTraceTests(unittest.TestCase):
@@ -37,6 +37,11 @@ class SimulateTraceTests(unittest.TestCase):
             ["condition", "trace_id", "time_s", "calcium", "true_state", "load"],
         )
         self.assertTrue(first.equals(second))
+
+    def test_manifest_records_the_feedback_condition(self):
+        manifest = simulation_metadata("blocked", 2, 3, 4, 0.8)
+        self.assertEqual(manifest["beta1"], 0.02)
+        self.assertEqual(manifest["frame_interval_s"], 0.5)
 
 
 if __name__ == "__main__":

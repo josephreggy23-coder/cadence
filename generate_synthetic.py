@@ -36,6 +36,7 @@ USAGE
 """
 
 import argparse
+import json
 from pathlib import Path
 
 import numpy as np
@@ -138,6 +139,21 @@ def generate_dataset(condition, n_traces=60, n_frames=600, seed=0, load_decay=0.
         columns=["condition", "trace_id", "time_s", "calcium", "true_state", "load"],
     )
 
+
+def simulation_metadata(condition, n_traces, n_frames, seed, load_decay):
+    """Describe the parameters used to generate a synthetic dataset."""
+    beta1 = 0.9 if condition == "intact" else 0.02
+    return {
+        "condition": condition,
+        "n_traces": n_traces,
+        "n_frames": n_frames,
+        "seed": seed,
+        "load_decay": load_decay,
+        "beta0": -3.0,
+        "beta1": beta1,
+        "frame_interval_s": DT,
+    }
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--condition", choices=["intact", "blocked"], default="intact")
@@ -151,6 +167,7 @@ def main():
         help="Per-frame retention of accumulated high-calcium load (0 to 1).",
     )
     ap.add_argument("--out", type=str, required=True)
+    ap.add_argument("--metadata-out", type=str, help="Optional JSON manifest path.")
     args = ap.parse_args()
 
     if args.n_traces < 1:
@@ -170,11 +187,23 @@ def main():
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
+    metadata_path = Path(args.metadata_out) if args.metadata_out else output_path.with_suffix(".json")
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(
+        json.dumps(
+            simulation_metadata(
+                args.condition, args.n_traces, args.n_frames, args.seed, args.load_decay
+            ),
+            indent=2,
+        ) + "\n",
+        encoding="utf-8",
+    )
     print(f"[{args.condition}] wrote {len(df)} rows "
           f"({args.n_traces} traces x {args.n_frames} frames) to {output_path}")
     beta1 = 0.9 if args.condition == "intact" else 0.02
     print(f"  ground-truth beta1 = {beta1}  (feedback strength)")
     print(f"  load decay = {args.load_decay}")
+    print(f"  manifest = {metadata_path}")
     last_trace = df.loc[df["trace_id"] == args.n_traces - 1, "true_state"].to_numpy()
     print(f"  state occupancy (last trace) = {state_occupancy(last_trace)}")
 

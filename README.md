@@ -41,6 +41,10 @@ python generate_synthetic.py --condition blocked --n_traces 60 --out data/blocke
 python -m unittest discover -s tests -v
 ```
 
+Each CSV is accompanied by a JSON manifest (for example, `data/intact.json`)
+that records the random seed, feedback parameters, duration, and load-decay
+setting used to generate it. Use `--metadata-out` to choose a different path.
+
 For sensitivity experiments, `--load-decay` controls how quickly accumulated
 high-calcium load fades between frames. It defaults to `0.92`; values must be
 between `0` and `1`.
