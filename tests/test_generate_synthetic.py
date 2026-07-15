@@ -5,7 +5,13 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from generate_synthetic import generate_dataset, simulation_metadata, state_occupancy, simulate_trace
+from generate_synthetic import (
+    generate_dataset,
+    simulation_metadata,
+    state_occupancy,
+    simulate_trace,
+    validate_dataset,
+)
 
 
 class SimulateTraceTests(unittest.TestCase):
@@ -42,6 +48,12 @@ class SimulateTraceTests(unittest.TestCase):
         manifest = simulation_metadata("blocked", 2, 3, 4, 0.8)
         self.assertEqual(manifest["beta1"], 0.02)
         self.assertEqual(manifest["frame_interval_s"], 0.5)
+
+    def test_dataset_validation_rejects_unknown_hidden_state(self):
+        dataset = generate_dataset("intact", n_traces=1, n_frames=2)
+        dataset.loc[0, "true_state"] = 99
+        with self.assertRaisesRegex(ValueError, "hidden-state"):
+            validate_dataset(dataset)
 
 
 if __name__ == "__main__":

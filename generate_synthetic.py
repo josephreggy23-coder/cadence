@@ -44,6 +44,7 @@ import pandas as pd
 
 # ----- fixed biology-inspired parameters (documented, not magic numbers) -----
 STATE_NAMES = ["QUIESCENT", "OSCILLATORY", "SUSTAINED_HIGH", "REFRACTORY"]
+DATASET_COLUMNS = ["condition", "trace_id", "time_s", "calcium", "true_state", "load"]
 EMISSION_MEAN = np.array([0.05, 0.35, 0.90, 0.10])   # dF/F-like mean per state
 EMISSION_SD   = np.array([0.03, 0.08, 0.12, 0.04])   # noise per state
 GCAMP_TAU = 3.0        # frames; slow sensor decay to mimic GCaMP kinetics
@@ -136,8 +137,23 @@ def generate_dataset(condition, n_traces=60, n_frames=600, seed=0, load_decay=0.
         )
     return pd.DataFrame(
         rows,
-        columns=["condition", "trace_id", "time_s", "calcium", "true_state", "load"],
+        columns=DATASET_COLUMNS,
     )
+
+
+def validate_dataset(dataset):
+    """Validate the labeled table contract used by future fitting stages."""
+    missing = set(DATASET_COLUMNS) - set(dataset.columns)
+    if missing:
+        raise ValueError(f"dataset is missing required columns: {sorted(missing)}")
+    if dataset.empty:
+        raise ValueError("dataset must contain at least one frame")
+    if not dataset["condition"].isin(["intact", "blocked"]).all():
+        raise ValueError("dataset contains an unknown condition")
+    if not dataset["true_state"].isin(range(len(STATE_NAMES))).all():
+        raise ValueError("dataset contains an unknown hidden-state index")
+    if (dataset["load"] < 0).any():
+        raise ValueError("dataset load values must be non-negative")
 
 
 def simulation_metadata(condition, n_traces, n_frames, seed, load_decay):
@@ -184,6 +200,7 @@ def main():
         seed=args.seed,
         load_decay=args.load_decay,
     )
+    validate_dataset(df)
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
