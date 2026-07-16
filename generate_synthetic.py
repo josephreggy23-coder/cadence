@@ -69,6 +69,10 @@ def simulate_trace(rng, n_frames, beta0, beta1, load_decay=0.92):
     Simulate one calcium trace under a load-dependent feedback law.
     Returns (calcium[t], hidden_state[t], load[t]).
     """
+    if n_frames < 1:
+        raise ValueError("n_frames must be at least 1")
+    if not 0.0 <= load_decay <= 1.0:
+        raise ValueError("load_decay must be between 0 and 1")
     state = 0
     load = 0.0
     states = np.empty(n_frames, dtype=int)
@@ -105,6 +109,11 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", type=str, required=True)
     args = ap.parse_args()
+
+    if args.n_traces < 1:
+        ap.error("--n_traces must be at least 1")
+    if args.n_frames < 1:
+        ap.error("--n_frames must be at least 1")
 
     # THE ONE KNOB THAT ENCODES THE HYPOTHESIS:
     # intact  -> strong positive beta1 (feedback present)
