@@ -76,11 +76,14 @@ cadence/
 ## Quickstart
 
 ```bash
-pip install numpy scipy pandas matplotlib hmmlearn
-python src/generate_synthetic.py --condition intact  --n_traces 60 --out data/intact.csv
-python src/generate_synthetic.py --condition blocked --n_traces 60 --out data/blocked.csv
-python src/plot_example.py
+python -m pip install -r requirements.txt
+python generate_synthetic.py --condition intact  --n_traces 60 --out data/intact.csv
+python generate_synthetic.py --condition blocked --n_traces 60 --out data/blocked.csv
 ```
+
+Additional scientific packages used by the planned fitting and visualization
+steps are introduced with those components, rather than required to generate
+and inspect the synthetic ground-truth data.
 
 ## Roadmap
 
