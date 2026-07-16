@@ -85,6 +85,10 @@ Additional scientific packages used by the planned fitting and visualization
 steps are introduced with those components, rather than required to generate
 and inspect the synthetic ground-truth data.
 
+For sensitivity experiments, `--load-decay` controls how quickly accumulated
+high-calcium load fades between frames. It defaults to `0.92`; values must be
+between `0` and `1`.
+
 ## Roadmap
 
 - [x] Ground-truth synthetic simulator with load-dependent feedback

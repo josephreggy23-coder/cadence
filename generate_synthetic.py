@@ -109,6 +109,12 @@ def main():
     ap.add_argument("--n_traces", type=int, default=60)
     ap.add_argument("--n_frames", type=int, default=600)   # 5 min at 2 Hz
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument(
+        "--load-decay",
+        type=float,
+        default=0.92,
+        help="Per-frame retention of accumulated high-calcium load (0 to 1).",
+    )
     ap.add_argument("--out", type=str, required=True)
     args = ap.parse_args()
 
@@ -116,6 +122,8 @@ def main():
         ap.error("--n_traces must be at least 1")
     if args.n_frames < 1:
         ap.error("--n_frames must be at least 1")
+    if not 0.0 <= args.load_decay <= 1.0:
+        ap.error("--load-decay must be between 0 and 1")
 
     # THE ONE KNOB THAT ENCODES THE HYPOTHESIS:
     # intact  -> strong positive beta1 (feedback present)
@@ -126,7 +134,9 @@ def main():
     rng = np.random.default_rng(args.seed)
     rows = []
     for i in range(args.n_traces):
-        cal, st, tt = simulate_trace(rng, args.n_frames, beta0, beta1)
+        cal, st, tt = simulate_trace(
+            rng, args.n_frames, beta0, beta1, load_decay=args.load_decay
+        )
         for t in range(args.n_frames):
             rows.append((args.condition, i, tt[t], cal[t], st[t]))
     df = pd.DataFrame(rows, columns=["condition", "trace_id", "time_s",
@@ -137,6 +147,7 @@ def main():
     print(f"[{args.condition}] wrote {len(df)} rows "
           f"({args.n_traces} traces x {args.n_frames} frames) to {output_path}")
     print(f"  ground-truth beta1 = {beta1}  (feedback strength)")
+    print(f"  load decay = {args.load_decay}")
 
 if __name__ == "__main__":
     main()
