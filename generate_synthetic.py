@@ -36,6 +36,8 @@ USAGE
 """
 
 import argparse
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -129,9 +131,11 @@ def main():
             rows.append((args.condition, i, tt[t], cal[t], st[t]))
     df = pd.DataFrame(rows, columns=["condition", "trace_id", "time_s",
                                      "calcium", "true_state"])
-    df.to_csv(args.out, index=False)
+    output_path = Path(args.out)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
     print(f"[{args.condition}] wrote {len(df)} rows "
-          f"({args.n_traces} traces x {args.n_frames} frames) to {args.out}")
+          f"({args.n_traces} traces x {args.n_frames} frames) to {output_path}")
     print(f"  ground-truth beta1 = {beta1}  (feedback strength)")
 
 if __name__ == "__main__":
