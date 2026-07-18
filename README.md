@@ -285,6 +285,100 @@ trustworthy** yet. The *comparative* claim survives strongly:
 recovery is now the critical path** to a trustworthy absolute `b1`, and therefore
 to a controller that can be tuned on real numbers rather than a contrast.
 
+## Step 4 — The controller (`src/controller.py`) ← **the solution**
+
+Everything above exists to make this possible: use the learned law to decide
+*when* and *how much* to intervene, spending as little as possible.
+
+### The single most important design decision
+
+The stimulus does **not** force the state. It acts by driving the load-sensing
+pathway — making the cell behave as though it had accumulated more load than it
+has:
+
+```
+P(high → refractory | L, u) = sigmoid(b0 + b1·(L + κ·u))
+                                            ↑
+                                    u sits INSIDE the b1 term
+```
+
+If we had instead written `sigmoid(b0 + b1·L + gain·u)`, the stimulus would
+bypass the feedback pathway and would still "work" under blockade — making the
+kill-shot unfalsifiable and the entire claim circular. **The kill-shot is only
+meaningful because the intervention is wired through `b1`.**
+
+### The policy: predictive, and silent by default
+
+While the cell is believed to be in SUSTAINED_HIGH:
+1. Predict whether it will self-suppress within a horizon: `1−(1−p_endo)^H`.
+2. If yes → **do nothing.** This is where the savings come from.
+3. If no → solve for the *smallest* `u` that restores the target escape
+   probability. Minimal by construction, not a fixed dose.
+
+**Online state estimation.** Viterbi needs the whole trace, so the controller
+uses the causal HMM **forward filter** instead. Because the trained emission uses
+a centred derivative, the controller runs with **one frame (0.5 s) of latency**
+rather than switching to a backward difference — which would silently give the
+online features a different distribution than the model was trained on.
+
+![Control comparison](figures/control_summary.png)
+
+### Results — diseased cell, feedback intact
+
+| policy | % time pathological | cost | verdict |
+|---|---|---|---|
+| no control | 25.3 % | 0 | the floor |
+| open-loop (fixed dose) | 21.9 % | 598 | works, but blasts continuously |
+| **CADENCE (learned law)** | **18.7 %** | **446** | better restoration, **25 % cheaper** |
+| CADENCE (healthy law) | 25.4 % | 3.9 | **fails — see below** |
+| **CADENCE (disease-calibrated)** | 22.6 % | **114** | open-loop restoration, **81 % cheaper** |
+
+### The failure that taught us something
+
+**CADENCE using the healthy-cell law does essentially nothing** (cost 3.9,
+no restoration). The healthy law says "this cell will suppress itself shortly,"
+so the controller stays silent — while the diseased cell, whose baseline
+propensity `b0` is far lower, never actually recovers.
+
+The fix is to split the law correctly:
+- **`b1` (feedback gain)** is a property of the *pathway*. Module 3 recovers it,
+  and it is preserved in disease — the pathway still works, the cell is just
+  harder to switch off.
+- **`b0` (baseline propensity)** is cell-specific and must be **calibrated on the
+  cell being treated**, exactly as a clinician baselines a patient before setting
+  stimulation parameters.
+
+The disease-calibrated row is that fix, and it is the headline result: **open-loop
+restoration at 19 % of the cost.** It is an *oracle* calibration (handed the true
+diseased `b0`) and labelled as such — estimating `b0` online from the patient's
+own trace is the obvious next step, not a solved problem.
+
+> Note the irony, reported rather than buried: the *attenuated* `b1` from Step 3
+> restores best (18.7 %) — but only by accident. Underestimating the cell's own
+> suppression makes the controller distrust it and over-treat, which happens to
+> help a diseased cell. That is not a validated mechanism, and we do not claim it.
+
+### The kill-shot ✅
+
+![Kill-shot](figures/control_blocked.png)
+
+With feedback pharmacologically blocked (`b1 ≈ 0`):
+
+| policy | % time pathological | cost |
+|---|---|---|
+| no control | 87.1 % | 0 |
+| open-loop | 86.7 % | **598** |
+| CADENCE (all variants) | **87.1 %** | 2–51 |
+
+**Every controller fails to restore — which is the correct result.** Open-loop is
+the sharpest demonstration: it spends the *full* 598 units of stimulation and
+achieves nothing, because the pathway its stimulus acts through is gone.
+
+A controller that still restored rhythm here would prove it was brute-forcing the
+system rather than working through the endogenous law — and would invalidate the
+whole thesis. This is the built-in falsification test, and CADENCE passes it by
+failing.
+
 ---
 
 ## Roadmap
@@ -294,8 +388,10 @@ to a controller that can be tuned on real numbers rather than a contrast.
 - [x] Hidden-state recovery validated against ground truth
 - [x] Feedback-law estimation (`b1` with CI): intact vs blocked
       *(estimator validated against oracle; end-to-end `b1` still attenuated)*
-- [ ] CADENCE controller: model-based intervention policy (in silico)
-- [ ] In-silico restoration + kill-shot (blocked feedback ⇒ no restoration)
+- [x] CADENCE controller: model-based intervention policy (in silico)
+- [x] In-silico restoration + kill-shot (blocked feedback ⇒ no restoration)
+- [ ] Online `b0` calibration from the treated cell's own trace
+- [ ] `run_all.py` one-command reproduction + `tests/test_pipeline.py`
 - [ ] Wet-lab: fit + control on real glial calcium recordings
 
 ## Known limitations (addressed, not hidden)
@@ -321,6 +417,12 @@ to a controller that can be tuned on real numbers rather than a contrast.
   `b1` value.
 - SUSTAINED_HIGH precision is only 44 %: the slope feature buys recall by
   over-predicting the high state. Disclosed as a trade, not presented as a win.
+- **The controller needs per-cell `b0` calibration, and currently gets it from an
+  oracle.** A law learned on healthy cells, applied unchanged to a diseased one,
+  makes CADENCE stay silent and fail (shown explicitly in Step 4). Estimating
+  `b0` online is required before any wet-lab deployment claim.
+- Restoration effect sizes are modest (25.3 % → 22.6 % pathological time). The
+  honest claim is *equal restoration at ~1/5 the cost*, not dramatic rescue.
 - In-silico control is a model of control, not proof in tissue; the wet-lab step
   is what closes that gap, and the pipeline runs unchanged on real recordings.
 
