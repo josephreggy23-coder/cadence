@@ -65,13 +65,16 @@ cadence/
 │   ├── generate_synthetic.py     # [done] ground-truth simulator (known feedback law)
 │   ├── fit_hmm.py                # [done] fit 4-state HMM + model-order selection
 │   ├── recover_states.py         # [done] Viterbi decode + validate vs ground truth
-│   ├── estimate_feedback_law.py  # [todo] recover b1 (feedback strength) per condition
-│   ├── controller.py             # [todo] CADENCE: model-based control policy
-│   └── run_all.py                # [todo] one-command reproduction of every figure
+│   ├── features.py               # [done] shared observation vector (level + slope)
+│   ├── estimate_feedback_law.py  # [done] recover b1 (feedback strength) per condition
+│   ├── controller.py             # [done] CADENCE: model-based control policy
+│   └── run_all.py                # [done] one-command reproduction of every figure
 ├── data/                         # synthetic csvs (gitignored; regenerable)
 ├── models/                       # fitted params (gitignored; regenerable)
 ├── figures/                      # publication figures (versioned — embedded below)
-└── tests/                        # [todo] asserts feedback recovered; controller restores
+├── tests/
+│   └── test_pipeline.py          # [done] asserts the scientific claims, 9/9
+└── ABSTRACT.md                   # 300-word research abstract
 ```
 
 ## Quickstart
@@ -240,6 +243,22 @@ to know that. It is selected by **profile likelihood** over a grid. On intact
 data the estimator picks **0.89** on its own — close to truth, and arrived at
 without being told.
 
+### The effect is visible before any model is fitted
+
+Before trusting a fitted coefficient, it is worth checking the raw structure.
+These are empirical transition matrices built straight from the **inferred**
+states — no logistic regression, no load variable:
+
+![Transition matrices](figures/transition_matrices.png)
+
+The boxed cell is the feedback transition. `SUSTAINED_HIGH → REFRACTORY` carries
+**0.18** of the probability mass with feedback intact but only **0.05** when it
+is blocked, while `SUSTAINED_HIGH → SUSTAINED_HIGH` rises from **0.82 → 0.95**:
+the blocked cell gets stuck in the high state because it can no longer switch
+itself off. Every other row is essentially unchanged, which is exactly what a
+*specific* pharmacological block should look like rather than a global change in
+dynamics. `b1` quantifies this; it does not conjure it.
+
 **Inference.** Logistic MLE hand-implemented on `scipy.optimize`. Uncertainty via
 **cluster bootstrap over whole traces**, because the independent experimental
 unit is the *cell*, not the frame — frames are heavily autocorrelated. The naive
@@ -327,15 +346,15 @@ online features a different distribution than the model was trained on.
 
 | policy | % time pathological | cost | verdict |
 |---|---|---|---|
-| no control | 25.3 % | 0 | the floor |
+| no control | 25.5 % | 0 | the floor |
 | open-loop (fixed dose) | 21.9 % | 598 | works, but blasts continuously |
-| **CADENCE (learned law)** | **18.7 %** | **446** | better restoration, **25 % cheaper** |
-| CADENCE (healthy law) | 25.4 % | 3.9 | **fails — see below** |
-| **CADENCE (disease-calibrated)** | 22.6 % | **114** | open-loop restoration, **81 % cheaper** |
+| **CADENCE (learned law)** | **18.9 %** | **442** | better restoration, **26 % cheaper** |
+| CADENCE (healthy law) | 25.6 % | 3.8 | **fails — see below** |
+| **CADENCE (disease-calibrated)** | 23.0 % | **112** | open-loop restoration, **81 % cheaper** |
 
 ### The failure that taught us something
 
-**CADENCE using the healthy-cell law does essentially nothing** (cost 3.9,
+**CADENCE using the healthy-cell law does essentially nothing** (cost 3.8,
 no restoration). The healthy law says "this cell will suppress itself shortly,"
 so the controller stays silent — while the diseased cell, whose baseline
 propensity `b0` is far lower, never actually recovers.
@@ -354,7 +373,7 @@ diseased `b0`) and labelled as such — estimating `b0` online from the patient'
 own trace is the obvious next step, not a solved problem.
 
 > Note the irony, reported rather than buried: the *attenuated* `b1` from Step 3
-> restores best (18.7 %) — but only by accident. Underestimating the cell's own
+> restores best (18.9 %) — but only by accident. Underestimating the cell's own
 > suppression makes the controller distrust it and over-treat, which happens to
 > help a diseased cell. That is not a validated mechanism, and we do not claim it.
 
@@ -366,9 +385,9 @@ With feedback pharmacologically blocked (`b1 ≈ 0`):
 
 | policy | % time pathological | cost |
 |---|---|---|
-| no control | 87.1 % | 0 |
-| open-loop | 86.7 % | **598** |
-| CADENCE (all variants) | **87.1 %** | 2–51 |
+| no control | 86.6 % | 0 |
+| open-loop | 86.3 % | **598** |
+| CADENCE (all variants) | **86.6 %** | 2–52 |
 
 **Every controller fails to restore — which is the correct result.** Open-loop is
 the sharpest demonstration: it spends the *full* 598 units of stimulation and
@@ -378,6 +397,52 @@ A controller that still restored rhythm here would prove it was brute-forcing th
 system rather than working through the endogenous law — and would invalidate the
 whole thesis. This is the built-in falsification test, and CADENCE passes it by
 failing.
+
+## Steps 5 & 6 — Reproduce it, then verify it
+
+### One command reproduces everything (`src/run_all.py`)
+
+```bash
+python src/run_all.py                  # full run: ~13 min, regenerates every figure
+python src/run_all.py --quick          # fewer EM restarts, narrower K sweep
+python src/run_all.py --skip-existing  # reuse data/*.csv if present
+```
+
+Every stage is invoked through its own documented CLI, so `run_all.py` cannot
+silently diverge from the commands in this README — if `python src/fit_hmm.py`
+breaks, the pipeline breaks identically rather than succeeding through a private
+code path. All seeds default to the same value, so a full run is deterministic:
+**the numbers in this README are exactly what `run_all.py` prints.**
+
+### The tests defend the claims, not the code (`tests/test_pipeline.py`)
+
+```bash
+python tests/test_pipeline.py     # 9/9 passed — no pytest required
+```
+
+Each test maps to a public claim, so a future refactor cannot quietly break the
+science:
+
+| test | claim defended |
+|---|---|
+| `b1_intact_significantly_positive` | feedback is recovered when present |
+| `b1_blocked_approximately_zero` | no feedback is invented when absent |
+| `b1_intact_greater_than_blocked_end_to_end` | the falsifiable contrast holds |
+| `cadence_reduces_pathological_time_vs_no_control` | it actually restores |
+| `cadence_costs_less_than_open_loop` | it is cheaper than the baseline |
+| `disease_calibrated_cadence_is_much_cheaper` | the headline efficiency claim |
+| `killshot_cadence_fails_to_restore_when_blocked` | **the kill-shot** |
+| `killshot_open_loop_also_fails_despite_full_cost` | stimulus needs the pathway |
+| `blocked_inferred_b1_artifact_is_still_present` | **pins a known artifact** |
+
+That last one is deliberately unusual: it asserts that the documented negative-`b1`
+artifact is *still there*. If state recovery ever improves enough to remove it,
+**the test fails on purpose** — so a genuine advance forces a README update
+instead of slipping by unnoticed.
+
+Tests requiring a *correct estimator* run on true states; tests about what the
+*pipeline delivers* run on inferred states. That split is documented in the file
+so nobody "fixes" a test by quietly swapping which states it uses.
 
 ---
 
@@ -390,8 +455,9 @@ failing.
       *(estimator validated against oracle; end-to-end `b1` still attenuated)*
 - [x] CADENCE controller: model-based intervention policy (in silico)
 - [x] In-silico restoration + kill-shot (blocked feedback ⇒ no restoration)
+- [x] `run_all.py` one-command reproduction + `tests/test_pipeline.py` (9/9)
 - [ ] Online `b0` calibration from the treated cell's own trace
-- [ ] `run_all.py` one-command reproduction + `tests/test_pipeline.py`
+- [ ] Improve REFRACTORY recovery (the binding constraint on absolute `b1`)
 - [ ] Wet-lab: fit + control on real glial calcium recordings
 
 ## Known limitations (addressed, not hidden)
@@ -421,7 +487,7 @@ failing.
   oracle.** A law learned on healthy cells, applied unchanged to a diseased one,
   makes CADENCE stay silent and fail (shown explicitly in Step 4). Estimating
   `b0` online is required before any wet-lab deployment claim.
-- Restoration effect sizes are modest (25.3 % → 22.6 % pathological time). The
+- Restoration effect sizes are modest (25.5 % → 23.0 % pathological time). The
   honest claim is *equal restoration at ~1/5 the cost*, not dramatic rescue.
 - In-silico control is a model of control, not proof in tissue; the wet-lab step
   is what closes that gap, and the pipeline runs unchanged on real recordings.

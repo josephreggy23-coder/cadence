@@ -195,7 +195,7 @@ def bic(log_likelihood, n_states, n_obs, n_features=1):
 # --------------------------------------------------------------------------- #
 # Model-order selection
 # --------------------------------------------------------------------------- #
-def select_model_order(X, lengths, k_values=(2, 3, 4, 5, 6), seed=0):
+def select_model_order(X, lengths, k_values=(2, 3, 4, 5, 6), seed=0, n_restarts=5):
     """
     For each K, report:
       - held-out log-likelihood PER FRAME (comparable across splits/K), and
@@ -209,14 +209,14 @@ def select_model_order(X, lengths, k_values=(2, 3, 4, 5, 6), seed=0):
     rows = []
     for K in k_values:
         # held-out: fit on train traces only, score untouched test traces
-        model_tr, _ = fit_one(X_tr, len_tr, K, seed=seed)
+        model_tr, _ = fit_one(X_tr, len_tr, K, seed=seed, n_restarts=n_restarts)
         heldout_ll = model_tr.score(X_te, len_te)
         heldout_ll_per_frame = heldout_ll / n_test_frames
 
         # BIC: fit on ALL data (BIC already penalizes complexity, no split needed).
         # n_features must reflect the actual observation dimension, otherwise the
         # complexity penalty is understated and BIC silently favours bigger models.
-        model_all, ll_all = fit_one(X, lengths, K, seed=seed)
+        model_all, ll_all = fit_one(X, lengths, K, seed=seed, n_restarts=n_restarts)
         model_bic = bic(ll_all, K, n_all_frames, n_features=X.shape[1])
 
         rows.append({
@@ -318,6 +318,10 @@ def main():
     ap.add_argument("--features", default="level+slope",
                     choices=["level+slope", "level"],
                     help="observation vector; 'level' is the ablation baseline.")
+    ap.add_argument("--n_restarts", type=int, default=5,
+                    help="EM restarts per fit; lower is faster, riskier init.")
+    ap.add_argument("--skip_selection", action="store_true",
+                    help="skip the K sweep and fit only --n_states (fast path).")
     ap.add_argument("--model_out", default="models/hmm_model.npz")
     ap.add_argument("--fig_out", default="figures/hmm_model_selection.png")
     args = ap.parse_args()
@@ -327,17 +331,24 @@ def main():
     print(f"  {len(lengths)} traces, {sum(lengths)} total frames, "
           f"features = {args.features} ({X.shape[1]}-D).\n")
 
-    print("Model-order selection (fitting K = "
-          f"{args.k_min}..{args.k_max}); this is the 'why 4 states' evidence:")
-    k_values = tuple(range(args.k_min, args.k_max + 1))
-    rows = select_model_order(X, lengths, k_values=k_values, seed=args.seed)
-
-    os.makedirs(os.path.dirname(args.fig_out), exist_ok=True)
-    plot_selection(rows, args.fig_out)
-    print(f"\nSaved model-order figure -> {args.fig_out}")
+    if args.skip_selection:
+        # Fast path for reruns/tests. The K-sweep is the 'why 4 states' evidence
+        # and should NOT be skipped when producing results for publication.
+        print("Skipping model-order selection (--skip_selection).")
+        rows = []
+    else:
+        print("Model-order selection (fitting K = "
+              f"{args.k_min}..{args.k_max}); this is the 'why 4 states' evidence:")
+        k_values = tuple(range(args.k_min, args.k_max + 1))
+        rows = select_model_order(X, lengths, k_values=k_values, seed=args.seed,
+                                  n_restarts=args.n_restarts)
+        os.makedirs(os.path.dirname(args.fig_out), exist_ok=True)
+        plot_selection(rows, args.fig_out)
+        print(f"\nSaved model-order figure -> {args.fig_out}")
 
     print(f"\nFitting FINAL {args.n_states}-state model on all data...")
-    final_model, final_ll = fit_one(X, lengths, args.n_states, seed=args.seed)
+    final_model, final_ll = fit_one(X, lengths, args.n_states, seed=args.seed,
+                                    n_restarts=args.n_restarts)
     print(f"  final training LL = {final_ll:.1f}")
 
     # Report the learned states sorted by mean calcium — a first sanity check that
