@@ -80,11 +80,13 @@ matplotlib.use("Agg")  # headless: we only ever save figures, never display
 import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
 
+from features import make_features, n_features as n_feat, CALCIUM_COL
+
 
 # --------------------------------------------------------------------------- #
 # Data loading
 # --------------------------------------------------------------------------- #
-def load_traces(csv_path):
+def load_traces(csv_path, feature_mode="level+slope"):
     """
     Load a condition CSV and return the observed calcium as the (X, lengths)
     format hmmlearn expects for MULTIPLE independent sequences:
@@ -100,12 +102,13 @@ def load_traces(csv_path):
     df = pd.read_csv(csv_path)
     lengths = []
     chunks = []
-    # group by trace so each cell is its own Markov sequence
+    # group by trace so each cell is its own Markov sequence. Features are built
+    # PER TRACE so the derivative never straddles a boundary between two cells.
     for _, g in df.groupby("trace_id", sort=True):
         g = g.sort_values("time_s")
-        chunks.append(g["calcium"].to_numpy())
+        chunks.append(make_features(g["calcium"].to_numpy(), feature_mode))
         lengths.append(len(g))
-    X = np.concatenate(chunks).reshape(-1, 1)  # hmmlearn wants 2-D (n_samples, n_features)
+    X = np.vstack(chunks)  # (total_frames, n_features)
     return X, lengths
 
 
@@ -210,9 +213,11 @@ def select_model_order(X, lengths, k_values=(2, 3, 4, 5, 6), seed=0):
         heldout_ll = model_tr.score(X_te, len_te)
         heldout_ll_per_frame = heldout_ll / n_test_frames
 
-        # BIC: fit on ALL data (BIC already penalizes complexity, no split needed)
+        # BIC: fit on ALL data (BIC already penalizes complexity, no split needed).
+        # n_features must reflect the actual observation dimension, otherwise the
+        # complexity penalty is understated and BIC silently favours bigger models.
         model_all, ll_all = fit_one(X, lengths, K, seed=seed)
-        model_bic = bic(ll_all, K, n_all_frames)
+        model_bic = bic(ll_all, K, n_all_frames, n_features=X.shape[1])
 
         rows.append({
             "K": K,
@@ -267,7 +272,16 @@ def plot_selection(rows, out_png):
 # --------------------------------------------------------------------------- #
 # Save fitted parameters
 # --------------------------------------------------------------------------- #
-def save_model(model, out_npz, source_csv, heldout_rows):
+def diag_covars(model):
+    """Return per-state diagonal variances as (K, n_features), whatever hmmlearn
+    hands back (it fills diag covars out to (K, d, d))."""
+    c = model.covars_
+    if c.ndim == 3:
+        return np.array([np.diag(ci) for ci in c])
+    return np.asarray(c)
+
+
+def save_model(model, out_npz, source_csv, heldout_rows, feature_mode):
     """
     Persist the fitted parameters as plain arrays (transparent + version-robust —
     a judge can `np.load` and inspect them; no fragile pickled objects).
@@ -279,8 +293,9 @@ def save_model(model, out_npz, source_csv, heldout_rows):
         n_states=model.n_components,
         startprob=model.startprob_,
         transmat=model.transmat_,
-        means=model.means_,          # shape (K, 1)
-        covars=model.covars_[:, 0, 0] if model.covars_.ndim == 3 else model.covars_,
+        means=model.means_,          # shape (K, n_features)
+        covars=diag_covars(model),   # shape (K, n_features)
+        feature_mode=np.array(feature_mode),
         source_csv=np.array(source_csv),
         heldout_k=np.array([r["K"] for r in heldout_rows]),
         heldout_ll_per_frame=np.array([r["heldout_ll_per_frame"] for r in heldout_rows]),
@@ -300,13 +315,17 @@ def main():
     ap.add_argument("--k_min", type=int, default=2)
     ap.add_argument("--k_max", type=int, default=6)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--features", default="level+slope",
+                    choices=["level+slope", "level"],
+                    help="observation vector; 'level' is the ablation baseline.")
     ap.add_argument("--model_out", default="models/hmm_model.npz")
     ap.add_argument("--fig_out", default="figures/hmm_model_selection.png")
     args = ap.parse_args()
 
     print(f"Loading calcium traces from {args.data} (calcium only; true_state untouched)...")
-    X, lengths = load_traces(args.data)
-    print(f"  {len(lengths)} traces, {sum(lengths)} total frames.\n")
+    X, lengths = load_traces(args.data, args.features)
+    print(f"  {len(lengths)} traces, {sum(lengths)} total frames, "
+          f"features = {args.features} ({X.shape[1]}-D).\n")
 
     print("Model-order selection (fitting K = "
           f"{args.k_min}..{args.k_max}); this is the 'why 4 states' evidence:")
@@ -324,15 +343,18 @@ def main():
     # Report the learned states sorted by mean calcium — a first sanity check that
     # the model found distinct, interpretable levels (Module 2 assigns biological
     # labels formally).
-    means = final_model.means_[:, 0]
+    means = final_model.means_[:, CALCIUM_COL]
+    covs = diag_covars(final_model)
     order = np.argsort(means)
     print("  learned emission means (sorted, low -> high calcium):")
     for rank, s in enumerate(order):
-        var = (final_model.covars_[:, 0, 0][s]
-               if final_model.covars_.ndim == 3 else final_model.covars_[s])
-        print(f"    state {s}:  mean={means[s]:.3f}  sd={np.sqrt(var):.3f}")
+        sd = np.sqrt(covs[s, CALCIUM_COL])
+        extra = ""
+        if X.shape[1] > 1:  # report the slope dimension too, when present
+            extra = f"   slope_mean={final_model.means_[s, 1]:+.4f}"
+        print(f"    state {s}:  mean={means[s]:.3f}  sd={sd:.3f}{extra}")
 
-    save_model(final_model, args.model_out, args.data, rows)
+    save_model(final_model, args.model_out, args.data, rows, args.features)
     print(f"\nSaved fitted {args.n_states}-state model -> {args.model_out}")
     print("Module 1 complete. Next: recover_states.py (Viterbi decode + validate).")
 

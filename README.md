@@ -127,24 +127,45 @@ score on *unseen* cells) and **BIC** (fit minus a complexity penalty).
 
 | K | held-out LL/frame | Δ | BIC | Δ |
 |---|---|---|---|---|
-| 2 | 0.765 | — | −55,477 | — |
-| 3 | 0.912 | +0.147 | −66,082 | −10,605 |
-| **4** | **1.009** | **+0.096** | **−72,915** | **−6,833** |
-| 5 | 1.061 | +0.052 | −76,644 | −3,729 |
-| 6 | 1.091 | +0.030 | −78,637 | −1,993 |
+| 2 | 2.434 | — | −176,527 | — |
+| 3 | 2.616 | +0.181 | −190,824 | −14,297 |
+| **4** | **2.826** | **+0.211** ← largest gain | **−204,238** | **−13,414** |
+| 5 | 2.954 | +0.128 | −213,556 | −9,318 |
+| 6 | 3.094 | +0.139 | −223,214 | −9,658 |
 
-**We do not claim a global optimum at K=4 — and the figure shows why.** Both
-curves keep improving slightly out to K=6. That is expected: GCaMP smoothing
-blurs four crisp levels into a continuum, and extra Gaussians can always shave a
-little more likelihood off a continuum. The honest justification for 4 is
-**diminishing returns** — each added state buys roughly *half* the improvement of
-the one before (ΔBIC: −10.6k → −6.8k → −3.7k → −2.0k), putting the knee at 4 —
-combined with the **interpretability constraint** enforced in Step 2: states must
-map to distinct, nameable calcium levels, not statistical sub-splits of one
-physiological regime.
+**We do not claim a global optimum at K=4** — both curves keep improving slightly
+out to K=6, because sensor smoothing blurs four crisp levels into a continuum
+that extra Gaussians can always shave a little more likelihood from. But the
+*marginal* evidence is clean: **adding the 4th state buys the single largest
+improvement in held-out likelihood (+0.211)** of any state added, and the gain
+falls off after it. That knee, plus the **interpretability constraint** enforced
+in Step 2 (states must map to distinct, nameable regimes rather than statistical
+sub-splits), is the justification.
 
-The fitted states land at cleanly separated calcium levels
-(means ≈ 0.06, 0.16, 0.32, 0.60), which is the sanity check Step 2 formalises.
+### The observation vector: level **and slope**
+
+Fitting on calcium level alone recovers the REFRACTORY state at only **24%**
+recall. The reason is physical: REFRACTORY's true mean (0.10) sits just 0.05
+above QUIESCENT (0.05) — below the noise floor — and because refractory always
+*follows* the high state, the sensor's decay tail is still coasting through the
+oscillatory range during those frames.
+
+So the observation is `(calcium, d(calcium)/dt)`. Refractory is not "low", it is
+**mid-level and falling**. The fitted states show the model discovered exactly
+this distinction on its own:
+
+| learned state | calcium mean | slope mean | reads as |
+|---|---|---|---|
+| 1 | 0.062 | −0.003 | low, flat → QUIESCENT |
+| 0 | 0.197 | **−0.046** | mid, **falling** → REFRACTORY |
+| 3 | 0.248 | **+0.037** | mid, **rising** → OSCILLATORY |
+| 2 | 0.489 | −0.004 | high → SUSTAINED_HIGH |
+
+A rejected alternative is documented in `src/features.py`: deconvolving the GCaMP
+kernel was tested at four smoothing widths and **failed** — it trades overall
+accuracy against refractory recall and never resolves the confusion (its
+best-accuracy setting made REFRACTORY *worse*, 18.8%). Slope also needs no
+knowledge of the sensor time constant, which on real recordings must be estimated.
 
 ## Step 2 — Decode the states and *measure* recovery (`src/recover_states.py`)
 
@@ -171,31 +192,98 @@ whether the states we infer *are the real ones*, before anything is built on top
 
 | condition | frame accuracy | chance | majority-class |
 |---|---|---|---|
-| intact | **69.6 %** | 25 % | 48.1 % |
-| blocked | **77.9 %** | 25 % | 41.4 % |
+| intact | **68.5 %** | 25 % | 48.1 % |
+| blocked | **75.4 %** | 25 % | 41.4 % |
 
-| state (intact) | recall | precision |
-|---|---|---|
-| QUIESCENT | 72.9 % | 95.9 % |
-| OSCILLATORY | 79.4 % | 66.8 % |
-| SUSTAINED_HIGH | 77.8 % | 68.6 % |
-| **REFRACTORY** | **24.1 %** | **17.4 %** |
+| state (intact) | recall | precision | vs level-only |
+|---|---|---|---|
+| QUIESCENT | 67.5 % | 97.3 % | — |
+| OSCILLATORY | 73.3 % | 79.1 % | — |
+| SUSTAINED_HIGH | **93.2 %** | 44.0 % | ↑ from 77.8 % |
+| **REFRACTORY** | **37.8 %** | 27.3 % | ↑ from 24.1 % |
 
-**The REFRACTORY result is a known, open weakness and is reported, not hidden.**
-Half of true refractory frames are read as OSCILLATORY and a further 23 % as
-still-HIGH. The cause is physical rather than statistical: refractory frames
-immediately follow high frames, and the GCaMP decay tail is still coasting down
-through the oscillatory range when the underlying state has already switched off.
+Overall accuracy is deliberately **not** the headline metric — it is dominated by
+QUIESCENT (~48 % of frames), so it rewards getting the easy state right. The two
+states Step 3 actually depends on both improved substantially.
 
-This matters because Step 3 estimates `P(high → refractory | L)` — if refractory
-onset is hard to see, that estimate is biased. Mitigations under evaluation:
-inverting the sensor kinetics (deconvolution) before fitting, and augmenting the
-emission with the local slope so "mid-level **and falling**" is distinguishable
-from "mid-level and steady."
+**Remaining weaknesses, stated plainly:**
+- **REFRACTORY recall is 37.8 %** — better than 24 %, but still poor. This is the
+  binding constraint on the whole pipeline (see Step 3).
+- **SUSTAINED_HIGH precision fell to 44 %** — the slope feature buys recall by
+  over-predicting the high state. A real trade, not a free win.
 
 > Note: ~100 % frame accuracy here would be a **red flag**, not a triumph — it
 > would imply label leakage. Honest recovery against a blurred sensor is partial
 > and structured, and we show exactly where it breaks.
+
+## Step 3 — Recover the feedback law (`src/estimate_feedback_law.py`)
+
+This is the scientific payload: recover
+`P(SUSTAINED_HIGH → REFRACTORY | L) = sigmoid(b0 + b1·L)` from decoded states,
+where **`b1 > 0` is the quantitative signature of negative feedback.**
+
+**The load variable.** A plain HMM has a *constant* transition matrix —
+P(high→refractory) would be identical whether the cell just entered the high
+state or has been stuck there for a minute. That is exactly wrong for cumulative
+feedback. So we keep the HMM for state *estimation* and model the feedback
+explicitly against a causal accumulator:
+
+```
+L[t] = decay · L[t-1] + 1{state[t] == SUSTAINED_HIGH}
+```
+
+Causal — past and present only, never the future — so the controller in Step 4
+can compute the same quantity live.
+
+**The decay is not smuggled in.** The simulator uses 0.92, but we are not allowed
+to know that. It is selected by **profile likelihood** over a grid. On intact
+data the estimator picks **0.89** on its own — close to truth, and arrived at
+without being told.
+
+**Inference.** Logistic MLE hand-implemented on `scipy.optimize`. Uncertainty via
+**cluster bootstrap over whole traces**, because the independent experimental
+unit is the *cell*, not the frame — frames are heavily autocorrelated. The naive
+Wald interval is printed alongside purely to show how much it would mislead.
+
+![Recovered feedback law](figures/feedback_law.png)
+
+### Results — and a genuine problem
+
+Every fit is run twice: from **inferred** states (what the pipeline really
+achieves) and from **true** states (an oracle that isolates how much damage
+state-estimation error alone does).
+
+| condition | source | recovered `b1` | 95 % CI (cluster bootstrap) | ground truth |
+|---|---|---|---|---|
+| intact | **oracle** (true states) | **+1.088** | [+1.002, +1.188] | +0.9 |
+| intact | inferred (end-to-end) | +0.208 | [+0.168, +0.259] | +0.9 |
+| blocked | **oracle** (true states) | **+0.016** | [−0.039, +0.080] | +0.02 |
+| blocked | inferred (end-to-end) | **−0.130** | [−0.184, −0.062] | +0.02 |
+
+**The estimator itself is validated.** Given clean states, it recovers
+`b1 ≈ +1.09` for intact (truth +0.9) and `b1 ≈ +0.016` for blocked (truth +0.02,
+CI comfortably contains zero). That is the estimator working as designed.
+
+**But end-to-end, state-estimation error does real damage — and we report it:**
+- intact `b1` is **attenuated ~5×** (+0.21 vs +0.9). This is classical
+  attenuation from measurement error in the outcome variable.
+- blocked `b1` comes out **significantly negative** (−0.130, CI excludes zero)
+  when the truth is ≈ 0. This is a **false signal**, not noise. The likely
+  mechanism: spurious refractory calls cluster at the *start* of long high runs
+  (where the signal is ambiguous) rather than the end, inducing an artificial
+  negative slope against `L`.
+
+**What this means:** the *absolute* `b1` from inferred states is **not
+trustworthy** yet. The *comparative* claim survives strongly:
+
+| test | difference | 95 % CI | one-sided p |
+|---|---|---|---|
+| oracle | +1.072 | [+0.971, +1.172] | < 0.0001 |
+| end-to-end | +0.338 | [+0.273, +0.395] | < 0.0001 |
+
+`b1_intact > b1_blocked` holds decisively either way. **Improving REFRACTORY
+recovery is now the critical path** to a trustworthy absolute `b1`, and therefore
+to a controller that can be tuned on real numbers rather than a contrast.
 
 ---
 
@@ -204,7 +292,8 @@ from "mid-level and steady."
 - [x] Ground-truth synthetic simulator with load-dependent feedback
 - [x] HMM fitting + model-order selection (held-out likelihood, BIC)
 - [x] Hidden-state recovery validated against ground truth
-- [ ] Feedback-law estimation (`b1` with CI): intact vs blocked
+- [x] Feedback-law estimation (`b1` with CI): intact vs blocked
+      *(estimator validated against oracle; end-to-end `b1` still attenuated)*
 - [ ] CADENCE controller: model-based intervention policy (in silico)
 - [ ] In-silico restoration + kill-shot (blocked feedback ⇒ no restoration)
 - [ ] Wet-lab: fit + control on real glial calcium recordings
@@ -220,10 +309,18 @@ from "mid-level and steady."
   smoothing makes extra states always marginally useful). K=4 is defended by
   diminishing returns plus interpretability, and the README states this openly
   rather than implying a clean optimum.
-- **REFRACTORY recovery is currently poor (24 % recall).** The sensor decay tail
-  overlaps the oscillatory range, so the "off" state is hard to see at the exact
-  moment it switches. This directly threatens the `b1` estimate in Step 3 and is
-  the top open problem, not a rounding error. Being tracked explicitly.
+- **REFRACTORY recovery is still poor (37.8 % recall, up from 24 %).** The sensor
+  decay tail overlaps the oscillatory range, so the "off" state is hard to see at
+  the moment it switches. This is now demonstrably **the binding constraint on
+  the whole pipeline**, not a cosmetic issue — see the next point.
+- **End-to-end `b1` is not yet trustworthy in absolute terms.** State-estimation
+  error attenuates intact `b1` ~5× and drives blocked `b1` significantly negative
+  when truth is ≈ 0. The oracle fit proves the *estimator* is sound, so the fault
+  is isolated to state recovery. The intact-vs-blocked contrast is unaffected and
+  remains decisive (p < 0.0001), so Step 4 is tuned on the contrast, not on a raw
+  `b1` value.
+- SUSTAINED_HIGH precision is only 44 %: the slope feature buys recall by
+  over-predicting the high state. Disclosed as a trade, not presented as a win.
 - In-silico control is a model of control, not proof in tissue; the wet-lab step
   is what closes that gap, and the pipeline runs unchanged on real recordings.
 

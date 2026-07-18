@@ -66,6 +66,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
 
+from features import make_features, CALCIUM_COL
+
 
 # --------------------------------------------------------------------------- #
 # Biological labelling convention
@@ -88,14 +90,20 @@ def load_fitted_model(npz_path):
     """
     d = np.load(npz_path, allow_pickle=False)
     K = int(d["n_states"])
+    means = d["means"]                              # (K, n_features)
+    n_features = means.shape[1]
     model = GaussianHMM(n_components=K, covariance_type="diag")
     model.startprob_ = d["startprob"]
     model.transmat_ = d["transmat"]
-    model.means_ = d["means"]                       # (K, 1)
+    model.means_ = means
     # hmmlearn stores diagonal covariances internally as (K, n_features)
-    model._covars_ = d["covars"].reshape(K, 1)
-    model.n_features = 1
-    return model, d
+    model._covars_ = d["covars"].reshape(K, n_features)
+    model.n_features = n_features
+    # The feature mode is read back from the model file rather than re-specified
+    # on the command line, so decoding can NEVER be run with a different
+    # observation vector than the one the model was trained on.
+    feature_mode = str(d["feature_mode"]) if "feature_mode" in d else "level"
+    return model, feature_mode
 
 
 def build_label_map(model):
@@ -105,7 +113,10 @@ def build_label_map(model):
 
     Returns `hmm_to_true`, where hmm_to_true[hmm_state] = true_state_index.
     """
-    means = model.means_[:, 0]
+    # Rank by the CALCIUM column only. When the slope feature is present it must
+    # not influence the biological naming - the ordering prior is about calcium
+    # level, nothing else.
+    means = model.means_[:, CALCIUM_COL]
     order_by_mean = np.argsort(means)  # hmm indices, lowest mean first
     hmm_to_true = np.empty(len(means), dtype=int)
     for rank, hmm_state in enumerate(order_by_mean):
@@ -113,7 +124,7 @@ def build_label_map(model):
     return hmm_to_true
 
 
-def decode_condition(csv_path, model, hmm_to_true):
+def decode_condition(csv_path, model, hmm_to_true, feature_mode):
     """
     Viterbi-decode every trace in a condition file and attach the inferred,
     biologically-labelled state. Returns the augmented DataFrame.
@@ -127,7 +138,7 @@ def decode_condition(csv_path, model, hmm_to_true):
 
     for _, g in df.groupby("trace_id", sort=True):
         g = g.sort_values("time_s")
-        X = g["calcium"].to_numpy().reshape(-1, 1)
+        X = make_features(g["calcium"].to_numpy(), feature_mode)
         hmm_states = model.predict(X)              # Viterbi
         inferred[g.index.to_numpy()] = hmm_to_true[hmm_states]
 
@@ -252,10 +263,11 @@ def main():
     os.makedirs(args.figdir, exist_ok=True)
 
     print(f"Loading fitted model from {args.model} ...")
-    model, meta = load_fitted_model(args.model)
+    model, feature_mode = load_fitted_model(args.model)
     hmm_to_true = build_label_map(model)
+    print(f"  feature mode (read from model file): {feature_mode}")
 
-    means = model.means_[:, 0]
+    means = model.means_[:, CALCIUM_COL]
     print("  label assignment (by emission-mean rank, NOT by peeking at truth):")
     for hmm_state in np.argsort(means):
         print(f"    hmm state {hmm_state} (mean {means[hmm_state]:.3f})"
@@ -263,7 +275,7 @@ def main():
 
     cms, names = [], []
     for cond, path in (("intact", args.intact), ("blocked", args.blocked)):
-        df = decode_condition(path, model, hmm_to_true)
+        df = decode_condition(path, model, hmm_to_true, feature_mode)
         cm, _ = recovery_report(df, cond)
         cms.append(cm)
         names.append(cond)
