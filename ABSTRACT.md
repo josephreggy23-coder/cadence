@@ -1,32 +1,27 @@
 # CADENCE: Restoring Glial Calcium Rhythm Through a Learned Endogenous Feedback Law
 
 Glial calcium dysregulation drives epilepsy, stroke, and neurodegeneration, yet
-existing neuromodulation is open-loop and neuron-centric: it delivers fixed
-stimulation with no principled account of when or how much to intervene, risking
-reactive astrogliosis. I asked whether astrocyte calcium is governed by a
-recoverable, load-dependent negative-feedback law, and whether a controller
-acting *through* that law could restore rhythm minimally.
-
-I model calcium as four hidden states and estimate the feedback as
-P(high→refractory | L) = sigmoid(b0 + b1·L), where L accumulates time spent activated; b1 > 0 is the feedback signature. Confidence intervals use
-a cluster bootstrap over cells, since frames are autocorrelated.
-
-The decisive result was recognising that a hidden Markov model is misspecified
-here. It assumes fluorescence depends only on the current state, but a GCaMP
-sensor integrates state *history*, so refractory frames — which follow high
-calcium — are misread as oscillatory. Feature engineering and constrained
-transitions both failed; one made accuracy collapse. Modelling the sensor
-explicitly, by tracking the joint state of regime and sensor level, raised
-refractory recall from 38% to 82% and recovered the simulator's hidden emission
-means and time constant from unlabelled data.
-
-That corrected estimation: recovered b1 rose from +0.208 to +0.832 against a true
-+0.9. It also revealed a subtler problem: an accurate healthy-cell law makes the
-controller stay silent on diseased ones, because feedback gain transfers across
-disease but baseline propensity does not. Calibrating that
-baseline online restored function at 89% below open-loop cost. Testing the
-blocked condition exposed a safety failure: against a dead pathway the controller
-escalated dose indefinitely for no benefit, until a futility interlock was added.
-
-Under blockade CADENCE correctly fails to restore, confirming it works through
-the endogenous law. Work is in silico; wet-lab validation follows.
+neuromodulation remains open-loop and neuron-centric, delivering fixed
+stimulation with no principled account of when or how much to intervene. I asked
+whether astrocyte calcium obeys a recoverable load-dependent feedback law,
+P(high→refractory | L) = sigmoid(b0 + b1·L), and whether a controller acting
+through that law could restore rhythm minimally. Validating against a simulator
+with known ground truth, I found the standard approach misspecified: a hidden
+Markov model assumes fluorescence reflects only the current state, but GCaMP
+integrates state history, so refractory frames — which follow high calcium — are
+systematically misread as oscillatory. Feature engineering and constrained
+transitions both failed, one collapsing accuracy from 69% to 45%. Modelling the
+sensor explicitly, by tracking the joint state of dynamical regime and sensor
+level, raised refractory recall from 38% to 82% and recovered the simulator's
+hidden emission means and time constant from unlabelled data. This corrected
+everything downstream: recovered b1 rose from +0.208 to +0.832 against a true
++0.9. It also exposed a subtler failure — an accurate law learned from healthy
+cells leaves the controller silent on diseased ones, because feedback gain
+transfers across disease while baseline propensity does not — so the controller
+now calibrates that baseline online from the cell it treats, restoring rhythm at
+89% below open-loop cost. Testing the blocked condition revealed a safety flaw:
+against a dead pathway the controller escalated dose indefinitely, spending more
+than continuous stimulation for no benefit, until a futility interlock was added.
+Crucially, when feedback is blocked CADENCE fails to restore, confirming it acts
+through the endogenous law rather than brute force; a controller that still
+worked would falsify the premise. Work is in silico; wet-lab validation follows.
