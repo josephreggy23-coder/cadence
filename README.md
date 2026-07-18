@@ -63,9 +63,10 @@ cadence/
 ├── README.md
 ├── src/
 │   ├── generate_synthetic.py     # [done] ground-truth simulator (known feedback law)
-│   ├── fit_hmm.py                # [done] fit 4-state HMM + model-order selection
+│   ├── fit_hmm.py                # [done] Gaussian HMM + model-order selection (ablation)
 │   ├── recover_states.py         # [done] Viterbi decode + validate vs ground truth
-│   ├── features.py               # [done] shared observation vector (level + slope)
+│   ├── kinetic_hmm.py            # [done] sensor-aware state model (PRODUCTION)
+│   ├── features.py               # [done] shared observation vector (ablation path)
 │   ├── estimate_feedback_law.py  # [done] recover b1 (feedback strength) per condition
 │   ├── controller.py             # [done] CADENCE: model-based control policy
 │   └── run_all.py                # [done] one-command reproduction of every figure
@@ -73,7 +74,8 @@ cadence/
 ├── models/                       # fitted params (gitignored; regenerable)
 ├── figures/                      # publication figures (versioned — embedded below)
 ├── tests/
-│   └── test_pipeline.py          # [done] asserts the scientific claims, 9/9
+│   └── test_pipeline.py          # [done] asserts the scientific claims, 12/12
+├── docs/real_data.md             # survey of candidate real recordings
 └── ABSTRACT.md                   # 300-word research abstract
 ```
 
@@ -86,11 +88,14 @@ pip install numpy scipy pandas matplotlib hmmlearn
 python src/generate_synthetic.py --condition intact  --n_traces 60 --out data/intact.csv
 python src/generate_synthetic.py --condition blocked --n_traces 60 --out data/blocked.csv
 
-# 2. fit the hidden-state model + justify the state count
-python src/fit_hmm.py
+# 2. fit the sensor-aware state model
+python src/kinetic_hmm.py
 
 # 3. decode the states and measure recovery against ground truth
-python src/recover_states.py
+python src/recover_states.py --model models/kinetic_model.npz
+
+# ...or just run everything at once
+python src/run_all.py
 ```
 
 ---
@@ -145,30 +150,58 @@ falls off after it. That knee, plus the **interpretability constraint** enforced
 in Step 2 (states must map to distinct, nameable regimes rather than statistical
 sub-splits), is the justification.
 
-### The observation vector: level **and slope**
+## Step 1b — Model the **sensor**, not the features (`src/kinetic_hmm.py`)
 
-Fitting on calcium level alone recovers the REFRACTORY state at only **24%**
-recall. The reason is physical: REFRACTORY's true mean (0.10) sits just 0.05
-above QUIESCENT (0.05) — below the noise floor — and because refractory always
-*follows* the high state, the sensor's decay tail is still coasting through the
-oscillatory range during those frames.
+This is the single most consequential change in the project, and it came from
+admitting that three earlier attempts had failed.
 
-So the observation is `(calcium, d(calcium)/dt)`. Refractory is not "low", it is
-**mid-level and falling**. The fitted states show the model discovered exactly
-this distinction on its own:
+**The Gaussian HMM is the wrong model here, and provably so.** It assumes
+`y_t ~ N(µ[s_t], σ[s_t])` — the observation depends only on the *current* state.
+That is **false by construction** for this data: the generator passes the state
+through a causal exponential sensor, so `y_t` depends on the whole state
+*history*. The damage landed exactly where it hurt most — REFRACTORY follows
+SUSTAINED_HIGH, so the sensor is still coasting down through the oscillatory
+range while the underlying state has already switched off. The model had no way
+to say *"this is a low state whose sensor hasn't caught up"*, so it said
+OSCILLATORY.
 
-| learned state | calcium mean | slope mean | reads as |
-|---|---|---|---|
-| 1 | 0.062 | −0.003 | low, flat → QUIESCENT |
-| 0 | 0.197 | **−0.046** | mid, **falling** → REFRACTORY |
-| 3 | 0.248 | **+0.037** | mid, **rising** → OSCILLATORY |
-| 2 | 0.489 | −0.004 | high → SUSTAINED_HIGH |
+**Three fixes were tried. Two failed, and both failures are kept in the repo:**
 
-A rejected alternative is documented in `src/features.py`: deconvolving the GCaMP
-kernel was tested at four smoothing widths and **failed** — it trades overall
-accuracy against refractory recall and never resolves the confusion (its
-best-accuracy setting made REFRACTORY *worse*, 18.8%). Slope also needs no
-knowledge of the sensor time constant, which on real recordings must be estimated.
+| attempt | result |
+|---|---|
+| GCaMP deconvolution (4 smoothing widths) | ❌ best-accuracy setting made REFRACTORY *worse* (18.8%) |
+| add slope: `(calcium, dC/dt)` | ⚠️ 24% → 38%, then plateaued |
+| mask transitions (REFRACTORY only from HIGH) | ❌ accuracy **collapsed** 69% → 45% |
+
+The mask failing is what settled it: the problem was never the transition
+structure or the features. It was the observation model.
+
+**The fix.** Track the joint state (discrete regime `s_t`, continuous sensor
+level `c_t`). Because `c` evolves deterministically given `(c_{t-1}, s_t)`, exact
+inference is possible — discretise `c` on a grid and run an ordinary
+forward–backward recursion over the 4 × NC joint state. No particle filter, no
+approximation beyond the grid.
+
+**It recovers the generator's hidden parameters, having seen no labels:**
+
+| | fitted | true |
+|---|---|---|
+| µ QUIESCENT | 0.032 | 0.05 |
+| µ REFRACTORY | **0.099** | **0.10** |
+| µ OSCILLATORY | 0.318 | 0.35 |
+| µ SUSTAINED_HIGH | 0.868 | 0.90 |
+| sensor τ | **2.60** | **3.0** |
+
+`τ` is chosen by profile likelihood, never assumed — on real recordings it must
+be estimated too.
+
+> **A bug worth documenting.** The first fit produced a degenerate model
+> (σ → 1.0, τ → 18.8) whose likelihood looked *excellent*. Cause: `_emission`
+> rescales per frame for numerical stability, and the rescaling constant was
+> never added back, so the "likelihood" being optimised wasn't the likelihood at
+> all — and the optimiser happily exploited it. Wide, sloppy emissions only score
+> correctly *worse* once the offset is restored. The fix is a two-line change and
+> the reasoning is preserved in the docstring.
 
 ## Step 2 — Decode the states and *measure* recovery (`src/recover_states.py`)
 
@@ -195,25 +228,27 @@ whether the states we infer *are the real ones*, before anything is built on top
 
 | condition | frame accuracy | chance | majority-class |
 |---|---|---|---|
-| intact | **68.5 %** | 25 % | 48.1 % |
-| blocked | **75.4 %** | 25 % | 41.4 % |
+| intact | **87.7 %** | 25 % | 48.1 % |
+| blocked | **90.4 %** | 25 % | 41.4 % |
 
-| state (intact) | recall | precision | vs level-only |
+Per-state (intact), with the Gaussian-HMM baseline for comparison:
+
+| state | recall | precision | Gaussian HMM recall |
 |---|---|---|---|
-| QUIESCENT | 67.5 % | 97.3 % | — |
-| OSCILLATORY | 73.3 % | 79.1 % | — |
-| SUSTAINED_HIGH | **93.2 %** | 44.0 % | ↑ from 77.8 % |
-| **REFRACTORY** | **37.8 %** | 27.3 % | ↑ from 24.1 % |
+| QUIESCENT | 86.2 % | 96.0 % | 67.5 % |
+| OSCILLATORY | 91.6 % | 89.9 % | 73.3 % |
+| SUSTAINED_HIGH | 89.5 % | **94.0 %** | 93.2 % *(precision only 44 %)* |
+| **REFRACTORY** | **82.4 %** | 58.1 % | 37.8 % |
 
-Overall accuracy is deliberately **not** the headline metric — it is dominated by
-QUIESCENT (~48 % of frames), so it rewards getting the easy state right. The two
-states Step 3 actually depends on both improved substantially.
+**REFRACTORY recall 37.8 % → 82.4 %**, and SUSTAINED_HIGH *precision* 44 % → 94 %.
+That second number matters as much as the first: the old model was sprinkling
+false high/refractory calls, which is exactly the error that was biasing `b1`.
 
-**Remaining weaknesses, stated plainly:**
-- **REFRACTORY recall is 37.8 %** — better than 24 %, but still poor. This is the
-  binding constraint on the whole pipeline (see Step 3).
-- **SUSTAINED_HIGH precision fell to 44 %** — the slope feature buys recall by
-  over-predicting the high state. A real trade, not a free win.
+**What is still imperfect, stated plainly:** REFRACTORY precision is 58 %, so
+roughly two in five refractory calls remain false. That residual is a genuine
+information limit rather than a modelling failure — in the first frames after a
+switch, a 2 Hz GCaMP trace does not yet *carry* the evidence that it happened.
+Closing that gap needs a faster indicator, not cleverer inference.
 
 > Note: ~100 % frame accuracy here would be a **red flag**, not a triumph — it
 > would imply label leakage. Honest recovery against a blurred sensor is partial
@@ -274,35 +309,38 @@ state-estimation error alone does).
 
 | condition | source | recovered `b1` | 95 % CI (cluster bootstrap) | ground truth |
 |---|---|---|---|---|
-| intact | **oracle** (true states) | **+1.088** | [+1.002, +1.188] | +0.9 |
-| intact | inferred (end-to-end) | +0.208 | [+0.168, +0.259] | +0.9 |
-| blocked | **oracle** (true states) | **+0.016** | [−0.039, +0.080] | +0.02 |
-| blocked | inferred (end-to-end) | **−0.130** | [−0.184, −0.062] | +0.02 |
+| intact | oracle (true states) | +1.058 | [+0.972, +1.160] | +0.9 |
+| intact | **inferred (end-to-end)** | **+0.832** | **[+0.753, +0.926]** | **+0.9** ✅ |
+| blocked | oracle (true states) | +0.016 | [−0.039, +0.080] | +0.02 ✅ |
+| blocked | inferred (end-to-end) | **−0.184** | [−0.234, −0.123] | +0.02 ❌ |
 
-**The estimator itself is validated.** Given clean states, it recovers
-`b1 ≈ +1.09` for intact (truth +0.9) and `b1 ≈ +0.016` for blocked (truth +0.02,
-CI comfortably contains zero). That is the estimator working as designed.
+**The end-to-end estimate now recovers the ground truth.** With the kinetic
+estimator, intact `b1` = **+0.832** with a CI that *contains the simulator's true
++0.9*. Before, with the Gaussian HMM, it was +0.208 — attenuated roughly
+five-fold. Fixing the observation model, not the regression, is what fixed this.
 
-**But end-to-end, state-estimation error does real damage — and we report it:**
-- intact `b1` is **attenuated ~5×** (+0.21 vs +0.9). This is classical
-  attenuation from measurement error in the outcome variable.
-- blocked `b1` comes out **significantly negative** (−0.130, CI excludes zero)
-  when the truth is ≈ 0. This is a **false signal**, not noise. The likely
-  mechanism: spurious refractory calls cluster at the *start* of long high runs
-  (where the signal is ambiguous) rather than the end, inducing an artificial
-  negative slope against `L`.
+| | Gaussian HMM | kinetic model | truth |
+|---|---|---|---|
+| intact `b1`, end-to-end | +0.208 | **+0.832** | +0.9 |
 
-**What this means:** the *absolute* `b1` from inferred states is **not
-trustworthy** yet. The *comparative* claim survives strongly:
+**One artifact survives and is reported, not buried.** From inferred states the
+blocked condition still yields a significantly *negative* `b1` (−0.184) where the
+truth is ≈ 0. Mechanism: false refractory calls cluster at the *start* of long
+high runs — where the sensor is still rising and the signal is ambiguous — rather
+than at the end, inducing an artificial negative slope against `L`. The oracle
+fit on the same data gives +0.016, so the fault is isolated to residual
+state-estimation error, not to the estimator.
+
+Practical consequence: a *blocked* absolute `b1` should not be quoted as a
+measurement. Its sign is trustworthy for the comparison; its value is not.
 
 | test | difference | 95 % CI | one-sided p |
 |---|---|---|---|
-| oracle | +1.072 | [+0.971, +1.172] | < 0.0001 |
-| end-to-end | +0.338 | [+0.273, +0.395] | < 0.0001 |
+| oracle | +1.042 | [+0.940, +1.141] | < 0.0001 |
+| **end-to-end** | **+1.016** | [+0.934, +1.110] | < 0.0001 |
 
-`b1_intact > b1_blocked` holds decisively either way. **Improving REFRACTORY
-recovery is now the critical path** to a trustworthy absolute `b1`, and therefore
-to a controller that can be tuned on real numbers rather than a contrast.
+`b1_intact > b1_blocked` holds decisively, and the end-to-end contrast is now
+almost identical to the oracle one — where previously it was three times smaller.
 
 ## Step 4 — The controller (`src/controller.py`) ← **the solution**
 
@@ -334,11 +372,12 @@ While the cell is believed to be in SUSTAINED_HIGH:
 3. If no → solve for the *smallest* `u` that restores the target escape
    probability. Minimal by construction, not a fixed dose.
 
-**Online state estimation.** Viterbi needs the whole trace, so the controller
-uses the causal HMM **forward filter** instead. Because the trained emission uses
-a centred derivative, the controller runs with **one frame (0.5 s) of latency**
-rather than switching to a backward difference — which would silently give the
-online features a different distribution than the model was trained on.
+**Online state estimation.** Smoothing needs the whole trace, so the controller
+uses the kinetic model's **forward filter**, which is causal by construction.
+Note this got *simpler* when the estimator improved: the old Gaussian model's
+centred-derivative feature peeked at `t+1`, forcing a one-frame latency
+workaround. Modelling the sensor removed the need for that feature, and with it
+the workaround — the kinetic filter is exactly causal with **zero lag**.
 
 ![Control comparison](figures/control_summary.png)
 
@@ -347,35 +386,51 @@ online features a different distribution than the model was trained on.
 | policy | % time pathological | cost | verdict |
 |---|---|---|---|
 | no control | 25.5 % | 0 | the floor |
-| open-loop (fixed dose) | 21.9 % | 598 | works, but blasts continuously |
-| **CADENCE (learned law)** | **18.9 %** | **442** | better restoration, **26 % cheaper** |
-| CADENCE (healthy law) | 25.6 % | 3.8 | **fails — see below** |
-| **CADENCE (disease-calibrated)** | 23.0 % | **112** | open-loop restoration, **81 % cheaper** |
+| open-loop (fixed dose) | 21.9 % | 600 | works, but blasts continuously |
+| CADENCE (learned law) | 25.2 % | 10 | **under-treats — see below** |
+| CADENCE (healthy law, oracle) | 25.2 % | 9.5 | under-treats, same reason |
+| **CADENCE (self-calibrating)** | 23.5 % | **64** | restores, **89 % cheaper** |
+| **CADENCE (disease-calibrated)** | **17.7 %** | 190 | **beats open-loop**, 68 % cheaper |
 
-### The failure that taught us something
+### Better science made the naive controller *worse* — and that is the lesson
 
-**CADENCE using the healthy-cell law does essentially nothing** (cost 3.8,
-no restoration). The healthy law says "this cell will suppress itself shortly,"
-so the controller stays silent — while the diseased cell, whose baseline
-propensity `b0` is far lower, never actually recovers.
+Once Step 1b removed the `b1` attenuation, the controller using the accurate
+learned law **stopped working** (25.2 %, cost 10). This is not a regression; it
+is the correct behaviour of a wrong assumption becoming visible. An accurate law
+learned from *healthy* cells says "cells like this suppress themselves quickly",
+so the controller concludes this cell will too, and stays silent — while the
+diseased cell never recovers.
 
-The fix is to split the law correctly:
-- **`b1` (feedback gain)** is a property of the *pathway*. Module 3 recovers it,
-  and it is preserved in disease — the pathway still works, the cell is just
-  harder to switch off.
-- **`b0` (baseline propensity)** is cell-specific and must be **calibrated on the
-  cell being treated**, exactly as a clinician baselines a patient before setting
-  stimulation parameters.
+Previously the *attenuated* `b1` accidentally compensated: underestimating the
+cell's self-suppression made the controller distrust it and over-treat. That
+looked like a win and was actually a bug cancelling a bug.
 
-The disease-calibrated row is that fix, and it is the headline result: **open-loop
-restoration at 19 % of the cost.** It is an *oracle* calibration (handed the true
-diseased `b0`) and labelled as such — estimating `b0` online from the patient's
-own trace is the obvious next step, not a solved problem.
+The real fix is that the two coefficients do not transfer equally:
+- **`b1` (feedback gain)** is a property of the *pathway*. Blockade experiments
+  show disease leaves it intact, so it transfers.
+- **`b0` (baseline propensity)** is exactly what disease changes, and must be
+  **measured on the cell being treated**.
 
-> Note the irony, reported rather than buried: the *attenuated* `b1` from Step 3
-> restores best (18.9 %) — but only by accident. Underestimating the cell's own
-> suppression makes the controller distrust it and over-treat, which happens to
-> help a diseased cell. That is not a validated mechanism, and we do not claim it.
+`AdaptiveCadence` does this: an observe-only window (no stimulation, so the
+measurement isn't contaminated by the controller's own actions), then 1-D MLE for
+`b0` with `b1` held at the population value, refit periodically. It recovers most
+of the benefit **with no oracle input at all** — 23.5 % at 89 % below open-loop
+cost. The disease-calibrated row remains as an upper bound showing what perfect
+baselining would buy.
+
+### A safety failure found by running the kill-shot
+
+The first self-calibrating version did something dangerous. Under blockade it
+observed a cell that never switches off, inferred a very low `b0`, and escalated
+the dose indefinitely — **spending 829 units, more than continuous open-loop
+(600), while achieving nothing.** For anything intended to touch a patient that
+is the worst possible failure mode: maximum exposure, zero benefit.
+
+So the controller now audits itself. It compares the observed switch-off rate on
+stimulated versus unstimulated frames and, if stimulation isn't beating baseline
+once enough trials accumulate, declares the pathway unresponsive and **stands
+down**. Cost under blockade fell **829 → 141** with restoration unchanged
+(correctly, still none). This is regression-tested.
 
 ### The kill-shot ✅
 
@@ -386,11 +441,13 @@ With feedback pharmacologically blocked (`b1 ≈ 0`):
 | policy | % time pathological | cost |
 |---|---|---|
 | no control | 86.6 % | 0 |
-| open-loop | 86.3 % | **598** |
-| CADENCE (all variants) | **86.6 %** | 2–52 |
+| open-loop | 86.3 % | **600** |
+| CADENCE (learned / healthy law) | 86.6 % | 2 |
+| CADENCE (disease-calibrated) | 86.6 % | 19 |
+| CADENCE (self-calibrating) | 86.6 % | 141 *(was 829 pre-interlock)* |
 
 **Every controller fails to restore — which is the correct result.** Open-loop is
-the sharpest demonstration: it spends the *full* 598 units of stimulation and
+the sharpest demonstration: it spends the *full* 600 units of stimulation and
 achieves nothing, because the pathway its stimulus acts through is gone.
 
 A controller that still restored rhythm here would prove it was brute-forcing the
@@ -403,9 +460,9 @@ failing.
 ### One command reproduces everything (`src/run_all.py`)
 
 ```bash
-python src/run_all.py                  # full run: ~13 min, regenerates every figure
-python src/run_all.py --quick          # fewer EM restarts, narrower K sweep
-python src/run_all.py --skip-existing  # reuse data/*.csv if present
+python src/run_all.py                   # full run: ~9 min, regenerates every figure
+python src/run_all.py --skip-existing   # reuse data/*.csv if present
+python src/run_all.py --with-ablation   # also run the Gaussian-HMM baseline + K sweep
 ```
 
 Every stage is invoked through its own documented CLI, so `run_all.py` cannot
@@ -417,7 +474,7 @@ code path. All seeds default to the same value, so a full run is deterministic:
 ### The tests defend the claims, not the code (`tests/test_pipeline.py`)
 
 ```bash
-python tests/test_pipeline.py     # 9/9 passed — no pytest required
+python tests/test_pipeline.py     # 12/12 passed — no pytest required
 ```
 
 Each test maps to a public claim, so a future refactor cannot quietly break the
@@ -433,6 +490,9 @@ science:
 | `disease_calibrated_cadence_is_much_cheaper` | the headline efficiency claim |
 | `killshot_cadence_fails_to_restore_when_blocked` | **the kill-shot** |
 | `killshot_open_loop_also_fails_despite_full_cost` | stimulus needs the pathway |
+| `end_to_end_b1_recovers_ground_truth` | the kinetic model removed the attenuation |
+| `healthy_law_alone_under_treats_the_diseased_cell` | why `b0` calibration is needed |
+| `safety_interlock_stands_down_when_pathway_is_dead` | **the safety interlock fires** |
 | `blocked_inferred_b1_artifact_is_still_present` | **pins a known artifact** |
 
 That last one is deliberately unusual: it asserts that the documented negative-`b1`
@@ -455,9 +515,12 @@ so nobody "fixes" a test by quietly swapping which states it uses.
       *(estimator validated against oracle; end-to-end `b1` still attenuated)*
 - [x] CADENCE controller: model-based intervention policy (in silico)
 - [x] In-silico restoration + kill-shot (blocked feedback ⇒ no restoration)
-- [x] `run_all.py` one-command reproduction + `tests/test_pipeline.py` (9/9)
-- [ ] Online `b0` calibration from the treated cell's own trace
-- [ ] Improve REFRACTORY recovery (the binding constraint on absolute `b1`)
+- [x] `run_all.py` one-command reproduction + `tests/test_pipeline.py` (12/12)
+- [x] Improve REFRACTORY recovery — kinetic sensor model, 38 % → 82 % recall
+- [x] Online `b0` calibration from the treated cell's own trace
+- [x] Safety interlock: stand down when the pathway is unresponsive
+- [ ] Ingest real recordings (candidates in `docs/real_data.md`)
+- [ ] Faster indicator / higher frame rate to close the REFRACTORY precision gap
 - [ ] Wet-lab: fit + control on real glial calcium recordings
 
 ## Known limitations (addressed, not hidden)
@@ -467,29 +530,31 @@ so nobody "fixes" a test by quietly swapping which states it uses.
   accumulated load, not a constant transition matrix.
 - Hidden-state models can overfit; defended with held-out likelihood, BIC, and
   the requirement that recovered states map to interpretable calcium levels.
-- Held-out likelihood and BIC do **not** bottom out at K=4 on this data (sensor
-  smoothing makes extra states always marginally useful). K=4 is defended by
-  diminishing returns plus interpretability, and the README states this openly
-  rather than implying a clean optimum.
-- **REFRACTORY recovery is still poor (37.8 % recall, up from 24 %).** The sensor
-  decay tail overlaps the oscillatory range, so the "off" state is hard to see at
-  the moment it switches. This is now demonstrably **the binding constraint on
-  the whole pipeline**, not a cosmetic issue — see the next point.
-- **End-to-end `b1` is not yet trustworthy in absolute terms.** State-estimation
-  error attenuates intact `b1` ~5× and drives blocked `b1` significantly negative
-  when truth is ≈ 0. The oracle fit proves the *estimator* is sound, so the fault
-  is isolated to state recovery. The intact-vs-blocked contrast is unaffected and
-  remains decisive (p < 0.0001), so Step 4 is tuned on the contrast, not on a raw
-  `b1` value.
-- SUSTAINED_HIGH precision is only 44 %: the slope feature buys recall by
-  over-predicting the high state. Disclosed as a trade, not presented as a win.
-- **The controller needs per-cell `b0` calibration, and currently gets it from an
-  oracle.** A law learned on healthy cells, applied unchanged to a diseased one,
-  makes CADENCE stay silent and fail (shown explicitly in Step 4). Estimating
-  `b0` online is required before any wet-lab deployment claim.
-- Restoration effect sizes are modest (25.5 % → 23.0 % pathological time). The
-  honest claim is *equal restoration at ~1/5 the cost*, not dramatic rescue.
-- In-silico control is a model of control, not proof in tissue; the wet-lab step
-  is what closes that gap, and the pipeline runs unchanged on real recordings.
-
-
+- Held-out likelihood and BIC do **not** bottom out at K=4 (sensor smoothing makes
+  extra states marginally useful). K=4 is defended by the marginal gain peaking
+  at 4 plus interpretability, and this is stated openly rather than implying a
+  clean optimum.
+- **REFRACTORY precision is 58 %** — about two in five refractory calls are still
+  false. Recall is now 82 %, but this residual is a real information limit: in
+  the frames right after a switch a 2 Hz GCaMP trace does not yet carry the
+  evidence. Faster indicators, not better inference, are what would close it.
+- **Blocked-condition `b1` from inferred states is still biased negative**
+  (−0.184 where truth is ≈ 0), because false refractory calls cluster early in
+  long high runs. Its *sign* is usable for the intact-vs-blocked contrast; its
+  *value* should not be quoted as a measurement. The oracle fit on the same data
+  gives +0.016, isolating the fault to residual state error.
+- **`b0` calibration costs untreated time.** The self-calibrating controller
+  needs an observe-only window (no stimulation) so its estimate is not
+  contaminated by its own actions. That is a real clinical cost, and the
+  disease-calibrated arm — which is handed the true `b0` — is labelled an oracle
+  upper bound, not a result.
+- **Restoration effect sizes are modest** (25.5 % → 23.5 % pathological time
+  self-calibrated; 17.7 % with perfect baselining). The honest claim is *equal or
+  better restoration at a fraction of the cost*, not dramatic rescue.
+- **In-silico only.** This is a model of control, not proof in tissue. The
+  pipeline is written to run unchanged on real recordings, and the wet-lab step
+  is what would close that gap.
+- **No real recordings yet.** Candidate public datasets are identified in
+  `docs/real_data.md`, including a WT-vs-H1R-knockout dataset that mirrors the
+  intact/blocked design, but none have been ingested — so every number here is
+  from synthetic data with known ground truth.

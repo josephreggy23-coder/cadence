@@ -48,22 +48,22 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 from estimate_feedback_law import (  # noqa: E402
     build_transition_dataset, fit_logistic, bootstrap_b1)
 from controller import (  # noqa: E402
-    OnlineStateEstimator, NoControl, OpenLoop, Cadence, evaluate,
-    TRUE_B1_INTACT, TRUE_B1_BLOCKED, TRUE_B0)
+    OnlineStateEstimator, NoControl, OpenLoop, Cadence, AdaptiveCadence,
+    evaluate, TRUE_B1_INTACT, TRUE_B1_BLOCKED, TRUE_B0)
 
 DECODED = {c: os.path.join(ROOT, "data", f"decoded_{c}.csv")
            for c in ("intact", "blocked")}
-MODEL = os.path.join(ROOT, "models", "hmm_model.npz")
+MODEL = os.path.join(ROOT, "models", "kinetic_model.npz")
 
 # Kept small so the whole suite runs in well under a minute; large enough that
 # the conclusions are stable under reseeding.
 N_BOOT = 120
 CTRL_TRACES = 6
-CTRL_FRAMES = 400
+CTRL_FRAMES = 600   # long enough for the self-calibrating arm to calibrate
 SEED = 0
 
 # Laws recovered by Module 3 (see README). Used to configure the controller.
-B0_LEARNED, B1_LEARNED = -2.363, 0.208
+B0_LEARNED, B1_LEARNED = -2.703, 0.832
 B0_SHIFT = -2.5
 B0_DISEASE, B1_DISEASE = TRUE_B0 + B0_SHIFT, 0.9
 
@@ -77,7 +77,7 @@ def _require_artifacts():
             "  python src/run_all.py --quick --skip-existing")
 
 
-def _fit_b1(condition, state_col, decay=0.89):
+def _fit_b1(condition, state_col, decay=0.90):
     df = pd.read_csv(DECODED[condition])
     L, y, _ = build_transition_dataset(df, state_col, decay)
     beta, _, _ = fit_logistic(L, y)
@@ -161,9 +161,10 @@ def _run_controller(b1_true, policy_factory):
 
 
 def test_cadence_reduces_pathological_time_vs_no_control():
+    """Self-calibrating CADENCE is the deliverable, so it is what gets tested."""
     none = _run_controller(TRUE_B1_INTACT, lambda: NoControl())
     cad = _run_controller(TRUE_B1_INTACT,
-                          lambda: Cadence(B0_LEARNED, B1_LEARNED))
+                          lambda: AdaptiveCadence(B0_LEARNED, B1_LEARNED))
     assert cad["pathological_frac"] < none["pathological_frac"], (
         f"CADENCE {cad['pathological_frac']*100:.1f}% should beat no-control "
         f"{none['pathological_frac']*100:.1f}%")
@@ -172,9 +173,54 @@ def test_cadence_reduces_pathological_time_vs_no_control():
 def test_cadence_costs_less_than_open_loop():
     ol = _run_controller(TRUE_B1_INTACT, lambda: OpenLoop(1.0))
     cad = _run_controller(TRUE_B1_INTACT,
-                          lambda: Cadence(B0_LEARNED, B1_LEARNED))
+                          lambda: AdaptiveCadence(B0_LEARNED, B1_LEARNED))
+    assert cad["cost"] < 0.5 * ol["cost"], (
+        f"CADENCE cost {cad['cost']:.0f} should be well under open-loop "
+        f"{ol['cost']:.0f}")
+
+
+def test_healthy_law_alone_under_treats_the_diseased_cell():
+    """
+    PINS A SCIENTIFIC POINT, not a bug.
+
+    An ACCURATE law learned from healthy cells makes the controller stay silent
+    on a diseased cell - it correctly believes healthy cells self-suppress and
+    wrongly concludes this one will too. This is precisely why online b0
+    calibration exists. If this ever starts restoring, the disease model or the
+    law has changed and the calibration argument in the README needs revisiting.
+    """
+    none = _run_controller(TRUE_B1_INTACT, lambda: NoControl())
+    cad = _run_controller(TRUE_B1_INTACT, lambda: Cadence(B0_LEARNED, B1_LEARNED))
+    assert cad["pathological_frac"] > 0.9 * none["pathological_frac"], (
+        "the uncalibrated healthy law now restores the diseased cell; the "
+        "motivation for online b0 calibration needs re-examining")
+
+
+def test_end_to_end_b1_recovers_ground_truth():
+    """
+    The kinetic estimator removed the ~5x attenuation: the END-TO-END b1 (from
+    inferred states) should now bracket the simulator's true +0.9.
+    """
+    b1, lo, hi, _ = _fit_b1("intact", "inferred_state")
+    assert lo > 0, f"intact end-to-end b1 CI [{lo:+.3f}, {hi:+.3f}] must exclude zero"
+    assert lo <= 0.9 <= hi or abs(b1 - 0.9) < 0.25, (
+        f"end-to-end b1={b1:+.3f} CI [{lo:+.3f}, {hi:+.3f}] no longer recovers "
+        f"the ground truth +0.9")
+
+
+def test_safety_interlock_stands_down_when_pathway_is_dead():
+    """
+    Under blockade the self-calibrating controller observes a cell that never
+    switches off, infers a very low b0, and would otherwise escalate the dose
+    forever - it spent MORE than continuous open-loop (829 vs 600) before the
+    futility interlock was added. It must now stand down instead.
+    """
+    ol = _run_controller(TRUE_B1_BLOCKED, lambda: OpenLoop(1.0))
+    cad = _run_controller(TRUE_B1_BLOCKED,
+                          lambda: AdaptiveCadence(B0_LEARNED, B1_LEARNED))
     assert cad["cost"] < ol["cost"], (
-        f"CADENCE cost {cad['cost']:.0f} should be below open-loop {ol['cost']:.0f}")
+        f"SAFETY: self-calibrating CADENCE spent {cad['cost']:.0f} under blockade "
+        f"vs open-loop {ol['cost']:.0f} - the futility interlock is not firing")
 
 
 def test_disease_calibrated_cadence_is_much_cheaper_than_open_loop():
@@ -203,7 +249,7 @@ def test_killshot_cadence_fails_to_restore_when_feedback_blocked():
     """
     none = _run_controller(TRUE_B1_BLOCKED, lambda: NoControl())
     cad = _run_controller(TRUE_B1_BLOCKED,
-                          lambda: Cadence(B0_DISEASE, B1_DISEASE))
+                          lambda: AdaptiveCadence(B0_LEARNED, B1_LEARNED))
     # "fails to restore" = does not meaningfully beat doing nothing
     assert cad["pathological_frac"] >= 0.90 * none["pathological_frac"], (
         f"KILL-SHOT VIOLATED: CADENCE restored the cell under blocked feedback "

@@ -54,18 +54,16 @@ stimulation that achieves the goal", not a fixed dose.
 
 ONLINE STATE ESTIMATION (no peeking at the future)
 --------------------------------------------------
-Modules 1-3 are offline analyses of complete recordings and may use Viterbi,
-which needs the whole trace. A controller cannot. Here we run the HMM FORWARD
-filter, which is causal: the state belief at frame t uses only frames 1..t.
+Modules 1-3 may use forward-BACKWARD smoothing, which needs the whole trace. A
+controller cannot. Here we run the kinetic model's FORWARD filter, which is
+causal by construction: the belief at frame t uses only frames 1..t.
 
-One subtlety, handled explicitly: the emission includes a CENTRED derivative
-(see features.py), which at frame t peeks at frame t+1. Rather than switch to a
-backward difference — which would give the online features a different
-distribution from the one the model was trained on, silently corrupting the
-likelihoods — the controller runs with ONE FRAME (0.5 s) OF LATENCY: at time t it
-acts on the state estimate for frame t-1, using the properly matched centred
-feature. This is both statistically consistent and realistic for a real-time
-system, which always has some loop delay.
+Note this got SIMPLER, not harder, when the estimator improved. The previous
+Gaussian estimator used a centred derivative that peeked at frame t+1, so the
+controller had to act on a one-frame-delayed estimate to keep its online features
+matched to training. Modelling the sensor explicitly removed the need for that
+feature entirely, and with it the latency workaround: the kinetic filter is
+exactly causal with zero lag.
 
 WHAT IS COMPARED
 ----------------
@@ -77,17 +75,25 @@ WHAT IS COMPARED
 Metrics: time spent in pathological SUSTAINED_HIGH (measured on the TRUE hidden
 state, which the controller never sees), and cumulative intervention cost sum(u).
 
-HONEST CAVEAT ON WHICH LAW THE CONTROLLER USES
------------------------------------------------
-Module 3 showed the end-to-end estimate of b1 is attenuated ~5x by
-state-estimation error (+0.21 recovered vs +0.9 true). The controller is run with
-BOTH laws so the operational cost of that error is visible rather than hidden:
-  - "learned"  : b1 as actually recovered end-to-end. Underestimating the cell's
-                 own suppression makes the controller distrust it and over-treat.
-  - "oracle"   : b1 from true states. What CADENCE would achieve if Module 2's
-                 REFRACTORY bottleneck were solved.
-The gap between them is the price of the current state-estimation error, and is
-reported as a headline number.
+WHICH LAW THE CONTROLLER USES, AND WHY CALIBRATION IS THE HARD PART
+-------------------------------------------------------------------
+With the kinetic estimator, Module 3 now recovers b1 = +0.832 end-to-end against
+a ground truth of +0.9 (its CI contains the true value), so the old ~5x
+attenuation is gone. That fixed the estimate - and immediately exposed a
+different problem, which is the real lesson of this module.
+
+An ACCURATE law learned from HEALTHY cells makes the controller do almost
+nothing on a DISEASED one: it correctly believes healthy cells self-suppress
+quickly, concludes this cell will too, and stays silent while the cell never
+recovers (the "learned law" and "healthy-law" arms, both ~25% pathological at a
+cost of ~10). Better science made the naive controller worse, because the
+coefficients do not transfer equally:
+  - b1, the feedback GAIN, is a property of the pathway and does transfer.
+  - b0, the BASELINE PROPENSITY, is what disease changes, and must be measured
+    on the cell being treated.
+`AdaptiveCadence` does exactly that, estimating b0 online from the patient's own
+trace, and carries a safety interlock that shuts stimulation down when the
+pathway proves unresponsive. See its docstring.
 """
 
 import argparse
@@ -127,7 +133,10 @@ KAPPA = 1.0
 
 
 def sigmoid(x):
-    return 1.0 / (1.0 + np.exp(-x))
+    # clip before exp: under strong intervention the logit can run large enough
+    # to overflow, which is harmless numerically but produces warning noise that
+    # would mask real problems in the logs.
+    return 1.0 / (1.0 + np.exp(-np.clip(x, -60.0, 60.0)))
 
 
 LEAK_TO_OSC = 0.02
@@ -184,6 +193,17 @@ class OnlineStateEstimator:
 
     def __init__(self, npz_path):
         d = np.load(npz_path, allow_pickle=False)
+
+        # Preferred path: the kinetic model, whose forward recursion is already
+        # exactly causal, so no latency workaround is needed.
+        if "model_type" in d and str(d["model_type"]) == "kinetic":
+            from kinetic_hmm import KineticHMM, KineticFilter
+            self.kind = "kinetic"
+            self._filter = KineticFilter(KineticHMM.load(npz_path))
+            self.reset()
+            return
+
+        self.kind = "gaussian"
         self.K = int(d["n_states"])
         self.startprob = d["startprob"]
         self.transmat = d["transmat"]
@@ -199,6 +219,9 @@ class OnlineStateEstimator:
         self.reset()
 
     def reset(self):
+        if getattr(self, "kind", None) == "kinetic":
+            self._filter.reset()
+            return
         self.alpha = None
         self.buffer = []      # raw calcium history, for the centred derivative
 
@@ -213,6 +236,10 @@ class OnlineStateEstimator:
         Feed one new calcium sample. Returns the MAP biological state for frame
         t-1, or None until enough history exists to form the centred feature.
         """
+        if self.kind == "kinetic":
+            # zero latency: the belief at frame t uses frames 1..t and nothing more
+            return self._filter.step(float(calcium_t))
+
         self.buffer.append(float(calcium_t))
         if len(self.buffer) < 3:
             return None
@@ -295,6 +322,151 @@ class Cadence:
             return self.u_max
         u = (logit_needed - self.b0 - self.b1 * L) / denom
         return float(np.clip(u, 0.0, self.u_max))
+
+
+class AdaptiveCadence(Cadence):
+    """
+    CADENCE that CALIBRATES ITSELF on the cell it is treating.
+
+    THE PROBLEM THIS SOLVES
+    Modules 1-3 learn the feedback law from HEALTHY cells. Applying that law
+    unchanged to a diseased cell makes the controller fail - it believes the cell
+    will suppress itself shortly, so it stays silent while the cell never
+    recovers (demonstrated explicitly by the "healthy-law" arm).
+
+    The reason is that the two coefficients do not transfer equally:
+      - b1, the feedback GAIN, is a property of the signalling pathway. It is
+        what Module 3 recovers, and blockade experiments show it is what disease
+        leaves intact.
+      - b0, the BASELINE PROPENSITY to switch off, is cell- and condition-
+        specific. It is exactly what disease changes.
+
+    So this policy fixes b1 at the population value and estimates b0 online from
+    the cell in front of it, which is what a clinician does when they baseline a
+    patient before setting stimulation parameters.
+
+    HOW
+      1. OBSERVE-ONLY WINDOW. For the first `calib_frames` frames the controller
+         applies no stimulation and simply records (load, did-it-switch-off)
+         pairs from its own inferred states. Intervening during this window would
+         contaminate the estimate - the whole point is to measure the cell's
+         UNAIDED behaviour.
+      2. Fit b0 by 1-D maximum likelihood with b1 held fixed.
+      3. Refit periodically as more evidence accumulates, then control as usual.
+
+    HONEST LIMITATION: the observe-only window means the cell goes untreated for
+    its duration, which is a real clinical cost, and the estimate is only as good
+    as the online state inference feeding it.
+    """
+    name = "CADENCE (self-calibrating)"
+
+    def __init__(self, b0_init, b1, calib_frames=150, refit_every=50,
+                 min_events=8, min_stim_trials=40, futility_margin=0.0, **kw):
+        super().__init__(b0_init, b1, **kw)
+        self.calib_frames = calib_frames
+        self.refit_every = refit_every
+        self.min_events = min_events
+        self.t = 0
+        self.prev_state = None
+        self.prev_L = None
+        self.prev_u = 0.0
+        self.obs_L, self.obs_y = [], []
+        self.calibrated = False
+
+        # --- safety interlock state (see _check_futility) ------------------ #
+        self.min_stim_trials = min_stim_trials
+        self.futility_margin = futility_margin
+        self.n_stim = self.k_stim = 0
+        self.n_quiet = self.k_quiet = 0
+        self.aborted = False
+
+    def _record(self, state, L):
+        """Turn consecutive observations into (load, switched-off?) pairs."""
+        if self.prev_state == HIGH:
+            switched = 1.0 if state == REFRACTORY else 0.0
+            self.obs_L.append(self.prev_L)
+            self.obs_y.append(switched)
+            # bucket the same outcome by whether we were stimulating, so the
+            # interlock can ask "is the stimulus doing anything at all?"
+            if self.prev_u > 0:
+                self.n_stim += 1
+                self.k_stim += switched
+            else:
+                self.n_quiet += 1
+                self.k_quiet += switched
+        self.prev_state, self.prev_L = state, L
+
+    def _check_futility(self):
+        """
+        SAFETY INTERLOCK: stop stimulating a pathway that is not responding.
+
+        Motivation, found empirically rather than anticipated: when the feedback
+        pathway is blocked, self-calibration observes a cell that never switches
+        off, infers a very low b0, and therefore demands ever-larger doses. In
+        testing it spent MORE than continuous open-loop stimulation (829 vs 600)
+        while achieving exactly nothing. For a real therapy that is the worst
+        possible failure mode - maximum exposure, zero benefit.
+
+        So the controller audits itself. It compares the observed switch-off rate
+        on stimulated frames against unstimulated ones. If stimulation is not
+        beating baseline once enough trials have accumulated, the pathway is
+        presumed unresponsive and the controller SHUTS DOWN rather than escalating.
+
+        This makes the kill-shot sharper, not weaker: under blockade CADENCE not
+        only fails to restore, it DETECTS that it cannot and stops - which is the
+        behaviour you would want from anything intended to touch a patient.
+        """
+        if self.aborted or self.n_stim < self.min_stim_trials:
+            return
+        rate_stim = self.k_stim / max(self.n_stim, 1)
+        rate_quiet = self.k_quiet / max(self.n_quiet, 1)
+        if rate_stim <= rate_quiet + self.futility_margin:
+            self.aborted = True
+
+    def _refit_b0(self):
+        """
+        1-D MLE for b0 with b1 fixed. Newton steps on the logistic
+        log-likelihood; cheap enough to run online.
+        """
+        L = np.asarray(self.obs_L)
+        y = np.asarray(self.obs_y)
+        if len(L) < self.min_events or y.sum() < 1:
+            return
+        b0 = self.b0
+        for _ in range(40):
+            z = b0 + self.b1 * L
+            p = sigmoid(z)
+            grad = np.sum(y - p)
+            hess = -np.sum(p * (1 - p))
+            if abs(hess) < 1e-9:
+                break
+            step = grad / hess
+            b0 -= step
+            if abs(step) < 1e-6:
+                break
+        if np.isfinite(b0):
+            self.b0 = float(np.clip(b0, -12.0, 4.0))
+            self.calibrated = True
+
+    def act(self, state, L):
+        self.t += 1
+        self._record(state, L)
+        self._check_futility()
+
+        if self.aborted:
+            self.prev_u = 0.0
+            return 0.0                      # pathway unresponsive: stand down
+        if self.t <= self.calib_frames:
+            self.prev_u = 0.0
+            return 0.0                      # observe only: do not contaminate
+        if self.t == self.calib_frames + 1 or self.t % self.refit_every == 0:
+            self._refit_b0()
+        if not self.calibrated:
+            self.prev_u = 0.0
+            return 0.0
+        u = super().act(state, L)
+        self.prev_u = u
+        return u
 
 
 # --------------------------------------------------------------------------- #
@@ -452,16 +624,16 @@ def plot_bars(all_results, out_png):
 # --------------------------------------------------------------------------- #
 def main():
     ap = argparse.ArgumentParser(description="CADENCE model-based controller.")
-    ap.add_argument("--model", default="models/hmm_model.npz")
+    ap.add_argument("--model", default="models/kinetic_model.npz")
     ap.add_argument("--n_traces", type=int, default=12)
     ap.add_argument("--n_frames", type=int, default=600)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--figdir", default="figures")
     # Laws recovered by Module 3. Defaults are the numbers actually measured.
-    ap.add_argument("--b0_learned", type=float, default=-2.363)
-    ap.add_argument("--b1_learned", type=float, default=0.208)
-    ap.add_argument("--b0_oracle", type=float, default=-3.160)
-    ap.add_argument("--b1_oracle", type=float, default=1.088)
+    ap.add_argument("--b0_learned", type=float, default=-2.703)
+    ap.add_argument("--b1_learned", type=float, default=0.832)
+    ap.add_argument("--b0_oracle", type=float, default=-3.187)
+    ap.add_argument("--b1_oracle", type=float, default=1.058)
     # Disease-calibrated law. See DEPLOYMENT NOTE below for why this variant
     # exists and why it is the scientifically correct way to run the controller.
     ap.add_argument("--b0_disease", type=float, default=None,
@@ -525,6 +697,9 @@ def main():
     res["CADENCE (disease-calib)"] = evaluate(
         lambda: Cadence(b0_disease, args.b1_disease), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_INTACT, **sim_kw)
+    res["CADENCE (self-calib)"] = evaluate(
+        lambda: AdaptiveCadence(args.b0_learned, args.b1_learned), est,
+        args.n_traces, args.seed, b1_true=TRUE_B1_INTACT, **sim_kw)
 
     for name, r in res.items():
         print(f"  {name:<26} pathological {r['pathological_frac']*100:5.1f}%"
@@ -553,6 +728,9 @@ def main():
     res_b["CADENCE (disease-calib)"] = evaluate(
         lambda: Cadence(b0_disease, args.b1_disease), est,
         args.n_traces, args.seed, b1_true=TRUE_B1_BLOCKED, **sim_kw)
+    res_b["CADENCE (self-calib)"] = evaluate(
+        lambda: AdaptiveCadence(args.b0_learned, args.b1_learned), est,
+        args.n_traces, args.seed, b1_true=TRUE_B1_BLOCKED, **sim_kw)
 
     for name, r in res_b.items():
         print(f"  {name:<26} pathological {r['pathological_frac']*100:5.1f}%"
@@ -566,7 +744,7 @@ def main():
     nc = res["no control"]["pathological_frac"]
     ol = res["open-loop"]
     for tag in ("CADENCE (learned law)", "CADENCE (healthy-law)",
-                "CADENCE (disease-calib)"):
+                "CADENCE (disease-calib)", "CADENCE (self-calib)"):
         cd = res[tag]
         restored = cd["pathological_frac"] < nc
         cheaper = cd["cost"] < ol["cost"]
@@ -586,7 +764,7 @@ def main():
     print("\n  [KILL-SHOT]")
     nc_b = res_b["no control"]["pathological_frac"]
     for tag in ("CADENCE (learned law)", "CADENCE (healthy-law)",
-                "CADENCE (disease-calib)"):
+                "CADENCE (disease-calib)", "CADENCE (self-calib)"):
         cd_b = res_b[tag]
         failed = cd_b["pathological_frac"] >= nc_b * 0.90
         print(f"    {tag}: pathological {nc_b*100:.1f}% -> "

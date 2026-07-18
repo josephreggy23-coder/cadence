@@ -120,6 +120,11 @@ def main():
     ap.add_argument("--skip-existing", dest="skip_existing", action="store_true",
                     help="reuse data/*.csv if already present.")
     ap.add_argument("--control_traces", type=int, default=12)
+    ap.add_argument("--fit_traces", type=int, default=15,
+                    help="traces used to fit the kinetic model.")
+    ap.add_argument("--with-ablation", dest="with_ablation", action="store_true",
+                    help="also run the Gaussian-HMM baseline and its K sweep "
+                         "(slow; regenerates the model-order figure).")
     args = ap.parse_args()
 
     py = sys.executable
@@ -138,14 +143,29 @@ def main():
              "--n_traces", str(args.n_traces), "--seed", str(args.seed),
              "--out", out], f"generate {cond} data")
 
-    # -- 1. fit the hidden-state model ---------------------------------- #
-    fit_cmd = [py, "src/fit_hmm.py", "--seed", str(args.seed)]
-    if args.quick:
-        fit_cmd += ["--n_restarts", "2", "--k_min", "3", "--k_max", "5"]
-    run(fit_cmd, "Module 1: fit HMM + model-order selection")
+    # -- 1. fit the state estimator ------------------------------------- #
+    # The kinetic model (Module 1b) is the production estimator: it models the
+    # GCaMP sensor explicitly instead of assuming y_t depends only on s_t, which
+    # took REFRACTORY recall from 38% to 82% and removed the b1 attenuation.
+    run([py, "src/kinetic_hmm.py", "--fit_traces", str(args.fit_traces),
+         "--out", "models/kinetic_model.npz"],
+        "Module 1b: fit kinetic (sensor-aware) state model")
+
+    # The Gaussian HMM is retained as a reproducible ABLATION - it is what
+    # produces the model-order ("why 4 states") figure and the baseline the
+    # kinetic model is measured against. Off by default because its K-sweep
+    # dominates runtime.
+    if args.with_ablation:
+        fit_cmd = [py, "src/fit_hmm.py", "--seed", str(args.seed)]
+        if args.quick:
+            fit_cmd += ["--n_restarts", "2", "--k_min", "3", "--k_max", "5"]
+        run(fit_cmd, "Module 1 (ablation): Gaussian HMM + model-order selection")
+        run([py, "src/recover_states.py", "--model", "models/hmm_model.npz"],
+            "Module 2 (ablation): recovery scoring with the Gaussian HMM")
 
     # -- 2. decode + validate against ground truth ---------------------- #
-    run([py, "src/recover_states.py"], "Module 2: Viterbi decode + recovery scoring")
+    run([py, "src/recover_states.py", "--model", "models/kinetic_model.npz"],
+        "Module 2: decode + recovery scoring")
 
     # -- transition-matrix figure (owned by this script) ---------------- #
     plot_transition_matrices(
@@ -161,6 +181,7 @@ def main():
 
     # -- 4. the controller ---------------------------------------------- #
     run([py, "src/controller.py", "--seed", str(args.seed),
+         "--model", "models/kinetic_model.npz",
          "--n_traces", str(args.control_traces)],
         "Module 4: CADENCE controller vs baselines + kill-shot")
 

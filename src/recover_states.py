@@ -89,6 +89,15 @@ def load_fitted_model(npz_path):
     robust to hmmlearn version changes (a judge can np.load and read the numbers).
     """
     d = np.load(npz_path, allow_pickle=False)
+
+    # Two estimators are supported. The kinetic model (Module 1b) supersedes the
+    # Gaussian HMM because it models the sensor explicitly; the Gaussian path is
+    # kept so the improvement can be reproduced as an ablation rather than
+    # asserted.
+    if "model_type" in d and str(d["model_type"]) == "kinetic":
+        from kinetic_hmm import KineticHMM
+        return KineticHMM.load(npz_path), "kinetic"
+
     K = int(d["n_states"])
     means = d["means"]                              # (K, n_features)
     n_features = means.shape[1]
@@ -138,9 +147,14 @@ def decode_condition(csv_path, model, hmm_to_true, feature_mode):
 
     for _, g in df.groupby("trace_id", sort=True):
         g = g.sort_values("time_s")
-        X = make_features(g["calcium"].to_numpy(), feature_mode)
-        hmm_states = model.predict(X)              # Viterbi
-        inferred[g.index.to_numpy()] = hmm_to_true[hmm_states]
+        if feature_mode == "kinetic":
+            # The kinetic model marginalises over the sensor level and returns
+            # biological indices directly - no emission-rank mapping needed here.
+            inferred[g.index.to_numpy()] = model.decode(g["calcium"].to_numpy())
+        else:
+            X = make_features(g["calcium"].to_numpy(), feature_mode)
+            hmm_states = model.predict(X)          # Viterbi
+            inferred[g.index.to_numpy()] = hmm_to_true[hmm_states]
 
     df["inferred_state"] = inferred
     df["inferred_label"] = [STATE_NAMES[s] for s in inferred]
@@ -264,14 +278,22 @@ def main():
 
     print(f"Loading fitted model from {args.model} ...")
     model, feature_mode = load_fitted_model(args.model)
-    hmm_to_true = build_label_map(model)
-    print(f"  feature mode (read from model file): {feature_mode}")
+    print(f"  estimator (read from model file): {feature_mode}")
 
-    means = model.means_[:, CALCIUM_COL]
-    print("  label assignment (by emission-mean rank, NOT by peeking at truth):")
-    for hmm_state in np.argsort(means):
-        print(f"    hmm state {hmm_state} (mean {means[hmm_state]:.3f})"
-              f"  ->  {STATE_NAMES[hmm_to_true[hmm_state]]}")
+    if feature_mode == "kinetic":
+        hmm_to_true = None
+        print("  fitted latent levels (ascending calcium == biological ordering):")
+        for r, name in enumerate(["QUIESCENT", "REFRACTORY",
+                                  "OSCILLATORY", "SUSTAINED_HIGH"]):
+            print(f"    {name:<16} mu={model.mu[r]:6.3f}  sd={model.sd[r]:5.3f}")
+        print(f"    sensor tau = {model.tau:.2f} frames")
+    else:
+        hmm_to_true = build_label_map(model)
+        means = model.means_[:, CALCIUM_COL]
+        print("  label assignment (by emission-mean rank, NOT by peeking at truth):")
+        for hmm_state in np.argsort(means):
+            print(f"    hmm state {hmm_state} (mean {means[hmm_state]:.3f})"
+                  f"  ->  {STATE_NAMES[hmm_to_true[hmm_state]]}")
 
     cms, names = [], []
     for cond, path in (("intact", args.intact), ("blocked", args.blocked)):
