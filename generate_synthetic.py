@@ -66,6 +66,12 @@ def high_row(p_off):
 def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
+
+def state_occupancy(states):
+    """Return the fraction of frames assigned to each hidden state."""
+    counts = np.bincount(states, minlength=len(STATE_NAMES))
+    return {name: float(count / states.size) for name, count in zip(STATE_NAMES, counts)}
+
 def simulate_trace(rng, n_frames, beta0, beta1, load_decay=0.92):
     """
     Simulate one calcium trace under a load-dependent feedback law.
@@ -150,6 +156,7 @@ def main():
           f"({args.n_traces} traces x {args.n_frames} frames) to {output_path}")
     print(f"  ground-truth beta1 = {beta1}  (feedback strength)")
     print(f"  load decay = {args.load_decay}")
+    print(f"  state occupancy (last trace) = {state_occupancy(st)}")
 
 if __name__ == "__main__":
     main()

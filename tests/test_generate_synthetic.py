@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from generate_synthetic import simulate_trace
+from generate_synthetic import state_occupancy, simulate_trace
 
 
 class SimulateTraceTests(unittest.TestCase):
@@ -22,6 +22,11 @@ class SimulateTraceTests(unittest.TestCase):
         self.assertEqual(states.shape, time.shape)
         self.assertEqual(states.shape, load.shape)
         self.assertTrue(np.all(load >= 0))
+
+    def test_state_occupancy_is_a_normalized_summary(self):
+        summary = state_occupancy(np.array([0, 0, 2, 3]))
+        self.assertEqual(summary["QUIESCENT"], 0.5)
+        self.assertAlmostEqual(sum(summary.values()), 1.0)
 
 
 if __name__ == "__main__":

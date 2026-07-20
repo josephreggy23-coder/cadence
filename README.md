@@ -28,6 +28,7 @@ controller respond to the intended feedback pathway rather than a shortcut.
 - Deterministic synthetic trace generation for intact and feedback-blocked conditions
 - Configurable trace count, duration, random seed, and load retention
 - CSV output with condition, trace identifier, time, calcium signal, hidden state, and accumulated load
+- Console summary of the hidden-state occupancy for a quick sanity check
 - Unit tests for simulator input validation and continuous integration on GitHub Actions
 
 ## Quickstart
