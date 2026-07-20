@@ -26,6 +26,7 @@ controller respond to the intended feedback pathway rather than a shortcut.
 ## What works today
 
 - Deterministic synthetic trace generation for intact and feedback-blocked conditions
+- Reusable `generate_dataset(...)` Python API for later fitting and validation stages
 - Configurable trace count, duration, random seed, and load retention
 - CSV output with condition, trace identifier, time, calcium signal, hidden state, and accumulated load
 - Console summary of the hidden-state occupancy for a quick sanity check

@@ -111,6 +111,33 @@ def simulate_trace(rng, n_frames, beta0, beta1, load_decay=0.92):
         calcium[t] = c + rng.normal(0, EMISSION_SD[states[t]])
     return calcium, states, np.arange(n_frames) * DT, loads
 
+
+def generate_dataset(condition, n_traces=60, n_frames=600, seed=0, load_decay=0.92):
+    """Generate a labeled synthetic dataset for one feedback condition."""
+    if condition not in {"intact", "blocked"}:
+        raise ValueError("condition must be 'intact' or 'blocked'")
+    if n_traces < 1:
+        raise ValueError("n_traces must be at least 1")
+    if n_frames < 1:
+        raise ValueError("n_frames must be at least 1")
+
+    beta0 = -3.0
+    beta1 = 0.9 if condition == "intact" else 0.02
+    rng = np.random.default_rng(seed)
+    rows = []
+    for trace_id in range(n_traces):
+        calcium, states, time, load = simulate_trace(
+            rng, n_frames, beta0, beta1, load_decay=load_decay
+        )
+        rows.extend(
+            (condition, trace_id, time_index, calcium[time_index], states[time_index], load[time_index])
+            for time_index in range(n_frames)
+        )
+    return pd.DataFrame(
+        rows,
+        columns=["condition", "trace_id", "time_s", "calcium", "true_state", "load"],
+    )
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--condition", choices=["intact", "blocked"], default="intact")
@@ -133,30 +160,23 @@ def main():
     if not 0.0 <= args.load_decay <= 1.0:
         ap.error("--load-decay must be between 0 and 1")
 
-    # THE ONE KNOB THAT ENCODES THE HYPOTHESIS:
-    # intact  -> strong positive beta1 (feedback present)
-    # blocked -> beta1 ~ 0 (feedback pharmacologically removed) -> flat law
-    beta0 = -3.0
-    beta1 = 0.9 if args.condition == "intact" else 0.02
-
-    rng = np.random.default_rng(args.seed)
-    rows = []
-    for i in range(args.n_traces):
-        cal, st, tt, load = simulate_trace(
-            rng, args.n_frames, beta0, beta1, load_decay=args.load_decay
-        )
-        for t in range(args.n_frames):
-            rows.append((args.condition, i, tt[t], cal[t], st[t], load[t]))
-    df = pd.DataFrame(rows, columns=["condition", "trace_id", "time_s",
-                                     "calcium", "true_state", "load"])
+    df = generate_dataset(
+        args.condition,
+        n_traces=args.n_traces,
+        n_frames=args.n_frames,
+        seed=args.seed,
+        load_decay=args.load_decay,
+    )
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
     print(f"[{args.condition}] wrote {len(df)} rows "
           f"({args.n_traces} traces x {args.n_frames} frames) to {output_path}")
+    beta1 = 0.9 if args.condition == "intact" else 0.02
     print(f"  ground-truth beta1 = {beta1}  (feedback strength)")
     print(f"  load decay = {args.load_decay}")
-    print(f"  state occupancy (last trace) = {state_occupancy(st)}")
+    last_trace = df.loc[df["trace_id"] == args.n_traces - 1, "true_state"].to_numpy()
+    print(f"  state occupancy (last trace) = {state_occupancy(last_trace)}")
 
 if __name__ == "__main__":
     main()
