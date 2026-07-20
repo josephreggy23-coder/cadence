@@ -44,6 +44,17 @@ For sensitivity experiments, `--load-decay` controls how quickly accumulated
 high-calcium load fades between frames. It defaults to `0.92`; values must be
 between `0` and `1`.
 
+### Output schema
+
+| Column | Meaning |
+| --- | --- |
+| `condition` | `intact` or feedback-`blocked` simulation condition |
+| `trace_id` | Identifier for an independently simulated trace |
+| `time_s` | Frame time in seconds |
+| `calcium` | Smoothed, noisy calcium observation |
+| `true_state` | Ground-truth hidden-state index used to generate the frame |
+| `load` | Accumulated high-calcium load used by the feedback law |
+
 ## Repository structure
 
 ```
