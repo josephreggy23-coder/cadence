@@ -69,7 +69,7 @@ def sigmoid(x):
 def simulate_trace(rng, n_frames, beta0, beta1, load_decay=0.92):
     """
     Simulate one calcium trace under a load-dependent feedback law.
-    Returns (calcium[t], hidden_state[t], load[t]).
+    Returns calcium, hidden state, time, and accumulated load arrays.
     """
     if n_frames < 1:
         raise ValueError("n_frames must be at least 1")
@@ -78,6 +78,7 @@ def simulate_trace(rng, n_frames, beta0, beta1, load_decay=0.92):
     state = 0
     load = 0.0
     states = np.empty(n_frames, dtype=int)
+    loads = np.empty(n_frames, dtype=float)
     latent = np.empty(n_frames)   # noise-free target the sensor chases
     for t in range(n_frames):
         states[t] = state
@@ -86,6 +87,7 @@ def simulate_trace(rng, n_frames, beta0, beta1, load_decay=0.92):
             load = load * load_decay + 1.0
         else:
             load = load * load_decay
+        loads[t] = load
         # dynamic feedback law only affects the HIGH row
         if state == 2:
             p_off = sigmoid(beta0 + beta1 * load)
@@ -101,7 +103,7 @@ def simulate_trace(rng, n_frames, beta0, beta1, load_decay=0.92):
     for t in range(n_frames):
         c += (latent[t] - c) / GCAMP_TAU
         calcium[t] = c + rng.normal(0, EMISSION_SD[states[t]])
-    return calcium, states, np.arange(n_frames) * DT
+    return calcium, states, np.arange(n_frames) * DT, loads
 
 def main():
     ap = argparse.ArgumentParser()
@@ -134,13 +136,13 @@ def main():
     rng = np.random.default_rng(args.seed)
     rows = []
     for i in range(args.n_traces):
-        cal, st, tt = simulate_trace(
+        cal, st, tt, load = simulate_trace(
             rng, args.n_frames, beta0, beta1, load_decay=args.load_decay
         )
         for t in range(args.n_frames):
-            rows.append((args.condition, i, tt[t], cal[t], st[t]))
+            rows.append((args.condition, i, tt[t], cal[t], st[t], load[t]))
     df = pd.DataFrame(rows, columns=["condition", "trace_id", "time_s",
-                                     "calcium", "true_state"])
+                                     "calcium", "true_state", "load"])
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
