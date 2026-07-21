@@ -1,29 +1,27 @@
 # CADENCE: Restoring Glial Calcium Rhythm Through a Learned Endogenous Feedback Law
 
-Astrocytes maintain the calcium rhythms that keep neural circuits stable, and
-when that rhythm breaks it contributes to epilepsy, stroke, and
-neurodegeneration. Yet clinical neuromodulation is open-loop: it delivers fixed
-stimulation with no principled sense of when or how much to intervene, wasting
-energy and risking reactive astrogliosis. I asked whether astrocyte calcium obeys
-a recoverable, load-dependent feedback law—P(high→refractory | L) =
-sigmoid(β0 + β1·L), where β1 > 0 marks negative feedback—and whether a controller
-acting *through* that law could restore rhythm with minimal stimulation. To test
-this before touching tissue, I built a simulator with a known feedback law and an
-intact-versus-blocked design mirroring a pharmacological experiment, so every
-inference could be checked against ground truth. The decisive finding was that
-the standard hidden Markov model is misspecified here: it assumes fluorescence
-reflects only the current state, but a calcium indicator integrates state
-history, so the refractory "off" state—which follows high calcium—is
-systematically misread as active. Feature engineering and constrained transitions
-both failed, one collapsing accuracy from 69% to 45%. Modeling the sensor
-explicitly, by tracking the joint hidden regime and sensor level, raised
-refractory recovery from 38% to 82% and recovered the simulator's hidden
-parameters from unlabeled data, lifting the estimated feedback strength from
-0.208 to 0.832 against a true 0.9. My controller then intervenes only when the
-learned law predicts the cell cannot self-correct, restoring rhythm at 89% below
-fixed-stimulation cost after calibrating each cell's baseline online; testing the
-blocked condition even exposed—and let me fix—a dangerous tendency to overstimulate
-an unresponsive pathway. Critically, when feedback is blocked the controller fails
-to restore rhythm, confirming it works through the endogenous law rather than
-brute force—a built-in falsification test. Work is in silico; validation on real
-recordings follows.
+Astrocytes maintain the calcium rhythms that keep neural circuits stable,
+and disruptions to these rhythms contribute to epilepsy, stroke, and
+neurodegeneration. Current neuromodulation is open-loop, delivering fixed
+stimulation with no principled way to decide when or how much to intervene, which
+wastes energy and can drive astrocytes into harmful reactive states. I asked
+whether astrocyte calcium follows a recoverable feedback law, in which the longer
+a cell remains in a high-calcium state the more likely it is to switch itself off,
+and whether a controller using that law could restore healthy rhythm with far
+less stimulation. To test the idea against ground truth before
+working with tissue, I built a simulator with a known feedback law and two
+conditions, one intact and one with the feedback pharmacologically blocked. The
+central result was that the standard hidden Markov model fails here for a specific
+reason. It assumes each fluorescence sample reflects only the current state, but
+calcium indicators blur the signal over time, so the recovering "off" state,
+which follows high calcium, is consistently mistaken for activity. After
+feature engineering and constrained models failed, I modeled the sensor itself,
+tracking the hidden state and sensor level together. This raised recovery of
+the off state from 38 to 82 percent and recovered the simulator's true parameters
+from unlabeled data, improving the estimated feedback strength from 0.21 to 0.83
+against a true value of 0.90. The controller intervenes only when the model
+predicts a cell cannot recover on its own, restoring rhythm at 89 percent lower
+cost than fixed stimulation after briefly calibrating to each cell. When feedback
+is blocked, it correctly fails to restore rhythm, showing that it acts through the
+cell's own biology rather than by force. This work is computational, and
+validation in living tissue is the next step.
