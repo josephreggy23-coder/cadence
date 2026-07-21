@@ -1,28 +1,29 @@
 # CADENCE: Restoring Glial Calcium Rhythm Through a Learned Endogenous Feedback Law
 
-Astrocytes govern the calcium rhythms that keep neural circuits stable, and the
-breakdown of these rhythms is a common driver of epilepsy, stroke, and
-neurodegeneration. Present neuromodulation remains blunt and open-loop, applying
-fixed stimulation with no principled sense of timing or dose, squandering energy
-and risking the reactive astrocyte states it should prevent. This project
-reframes the challenge as one of control: rather than overriding the cell, it
-learns the cell's own regulatory rule and steers the system through it. The
-governing hypothesis is a load-dependent feedback law, in which prolonged
-residence in a high-calcium state progressively increases the probability that a
-cell suppresses itself. To earn trust before any tissue is involved, a simulator
-with a known feedback law was constructed, paired with intact and
-pharmacologically blocked conditions that render every inference checkable against
-ground truth. A pivotal insight followed: the standard hidden Markov model is
-fundamentally misspecified for calcium imaging, because it treats each fluorescent
-sample as a snapshot of the present state, whereas real indicators accumulate
-signal across time. As a result the recovering "off" state, which always trails
-high activity, is systematically misread. Modeling the sensor itself, and tracking
-hidden state and sensor level jointly, resolved the failure. Recovery of the off
-state rose from 38 to 82 percent, and the simulator's hidden parameters were
-reconstructed from unlabeled data, sharpening the estimated feedback strength from
-0.21 to 0.83 against a true value of 0.90. The resulting controller acts only when
-the model predicts a cell cannot recover unaided, restoring rhythm at 89 percent
-lower cost than fixed stimulation once briefly calibrated to each cell. Decisively,
-when the feedback pathway is blocked, restoration fails by design, confirming that
-control flows through endogenous biology rather than force. This computational
-foundation is built to transfer to living tissue.
+Dysregulated astrocytic Ca2+ signaling is a key driver of high-burden CNS
+disorders, including epilepsy, stroke, and neurodegeneration, yet existing
+neuromodulation remains open-loop and neuron-centric, delivering fixed stimulation
+with no principled control of when or how much to intervene. Here we present
+CADENCE, a closed-loop computational framework that learns an astrocyte's own
+regulatory law and restores healthy Ca2+ rhythm by intervening minimally through
+it. We hypothesized that astrocytic Ca2+ obeys a load-dependent negative feedback
+law, in which prolonged residence in a high-Ca2+ state raises the probability that
+the cell transitions into a refractory, self-suppressed state, and asked whether
+this law could be recovered from imaging and exploited for control. Validation
+used a ground-truth simulator with paired intact and pharmacologically blocked
+feedback, rendering every inference falsifiable. We found that a standard hidden
+Markov model is misspecified for Ca2+ imaging: it treats each fluorescent sample
+as instantaneous, whereas real indicators integrate signal over time, causing the
+recovering state to be systematically misread. Embedding the sensor within the
+state estimator resolved this, raising recovery of the suppressed state from 38%
+to 82% and reconstructing the generative parameters from unlabeled data, which
+sharpened the recovered feedback coefficient from 0.21 to 0.83 against a true 0.90.
+The resulting controller intervenes only when the model predicts a cell cannot
+self-correct, restoring rhythm at 89% lower cost than fixed stimulation after
+brief per-cell calibration. Unexpectedly, improving state estimation degraded a
+naive controller, revealing that feedback gain generalizes across disease while
+baseline excitability does not, a dissociation that motivated online calibration.
+Critically, blocking the feedback pathway abolished restoration by design,
+confirming mechanism-dependent control rather than brute force. CADENCE
+establishes a principled, self-validating framework for glia-targeted closed-loop
+modulation and a foundation for translation to living tissue.
