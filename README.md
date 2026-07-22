@@ -25,6 +25,7 @@ control appears to work?
 | --- | --- | --- | --- |
 | Synthetic state recovery | Four-state simulator; fit on 10 intact traces and score on 20 held-out traces | 89.0% offline-smoothed accuracy; 83.4% causal-filter accuracy | The estimator handles indicator memory under this simulator; online inference is harder |
 | Synthetic exit-hazard recovery | Causal states; retrospectively standardized shared exposure decay of 0.90; whole-trace bootstrap | Intact `b1 = 0.694`, 95% CI `[0.558, 0.847]`; intact−blocked difference `0.725` `[0.580, 0.864]` | Recovers a contrast deliberately encoded in simulation; not a biochemical measurement |
+| Multi-seed synthetic sensitivity | Five independently randomized simulator runs; same 30-trace / 20-held-out-trace design; seed-specific trace bootstraps | Causal accuracy 76.0–83.4%; all 5/5 intact−blocked contrast intervals exclude zero | Robustness within this simulator family only; not biological replication |
 | Real astrocyte secondary analysis | Public H1R data; 147 ROIs nested in 13 slices; ROIs aggregated before slice comparison | KO−WT response ΔAUC positive in 5/5 and 6/7 paired slices | Descriptive biological context; animal identifiers are unavailable |
 | Offset-free H1R robustness | Alternative median-response metric on the same recordings, common within-slice MAD scale, and 36-specification grid | Common-scale KO−WT effect positive in 5/5 and 6/7 slices; mean effect positive in all 36 specifications in both cohorts | Direction is not created by the `+100,000` offset, but this is not an independent dataset or assay and a stricter per-ROI z check is less consistent |
 | In-silico controller | Intervention and endogenous escape share one simulated coefficient | Control is disabled when that coefficient is near zero | Structural code/model check, not independent biological validation |
@@ -94,6 +95,24 @@ oracle-state interval includes zero. This small false-positive null bias from
 hard causal labels is reported explicitly; the cross-condition contrast—not the
 blocked point estimate alone—is the synthetic result.
 
+### Multi-seed sensitivity
+
+The compact benchmark was independently regenerated for five fixed simulator
+seeds. Held-out causal accuracy ranged from 76.0% to 83.4%; the causal
+intact-minus-blocked `b1` contrast ranged from `+0.637` to `+0.891`, and all
+five seed-specific trace-bootstrap intervals excluded zero. The causal blocked
+slope remained negative across the five runs, consistent with the documented
+hard-label null bias; the contrast remains the relevant endpoint.
+
+<p align="center">
+  <img src="figures/seed_robustness.png" width="820" alt="Multi-seed synthetic robustness benchmark">
+</p>
+
+This checks variation across random draws from the same simulator—not an
+independent dataset, a biological replication, or a generalization guarantee.
+See the [full sensitivity methods](docs/synthetic_robustness.md) and
+[machine-readable results](results/seed_robustness.json).
+
 <details>
 <summary>Show synthetic benchmark figures</summary>
 
@@ -125,6 +144,9 @@ python -m pip install -r requirements.txt
 # Recreate the compact reference benchmark and all versioned analyses
 python src/run_all.py --quick --n_traces 30 --fit_traces 10 --control_traces 6
 
+# Longer: repeat the synthetic benchmark across five independent generator seeds
+python src/seed_robustness.py
+
 # Run unit and claim-level regression checks
 python -m unittest discover -s tests -v
 python tests/test_pipeline.py
@@ -143,6 +165,7 @@ is an out-of-domain loader/QC check, not glial validation.
 
 - Held-out recovery scoring against labelled synthetic data
 - Whole-trace uncertainty for a fixed shared synthetic hazard contrast
+- Multi-seed robustness of that synthetic contrast under the same simulator
 - Machine-readable wiring from the learned synthetic law into the controller
 - Hierarchy-aware descriptive analysis of public astrocyte fluorescence
 - Source checksums, deterministic derived data, continuous integration, and
@@ -160,7 +183,7 @@ is an out-of-domain loader/QC check, not glial validation.
 Use an animal-identified glial calcium dataset under a prospectively frozen
 analysis plan; compare state-history predictors with predictors computed directly
 from fluorescence; and evaluate model mismatch across indicators, sampling rates,
-drift, heterogeneous traces, and multiple seeds.
+drift, and heterogeneous traces beyond the five same-simulator seed checks.
 
 ## Research integrity
 

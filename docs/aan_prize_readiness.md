@@ -49,6 +49,7 @@ boundary between observation and assumption.
 | --- | --- | --- |
 | Synthetic generator | A known four-state plant with a known dwell-dependent exit law | That astrocytes have four such states or use this mechanism |
 | Sensor-aware estimator | Whether an estimator can recover synthetic states despite indicator memory | Biological state identity in an unlabeled recording |
+| Multi-seed synthetic sensitivity | Whether synthetic recovery and the intact-minus-blocked contrast persist across five randomizations of the same simulator | Generalization beyond that simulator family or biological replication |
 | Synthetic controller | Behaviour of a policy under the assumed plant and intervention equation | Safety, efficacy, or mechanism in tissue, animals, or people |
 | DANDI 001076 loader | NWB ingestion and QC on a real neuronal zebrafish recording | Glial biology or the controller hypothesis |
 | Dryad H1R analysis | Exploratory secondary analysis plus an offset-free alternative metric on the same real mouse astrocyte recordings | Independent replication, prospective validation of CADENCE, or animal-level inference when IDs are unavailable |
@@ -79,8 +80,9 @@ Before applying, the student should ask `science@aan.com` for written guidance o
 3. Compare dwell history with a predictor computed from measured fluorescence.
    A positive slope on a state-derived accumulator currently shows increasing
    exit hazard, not a molecular calcium-load mechanism.
-4. Add model-mismatch simulations, multiple seeds, heterogeneous traces,
-   bleaching/drift, kinetic-grid sensitivity, and strictly held-out scoring.
+4. Extend the current five-seed same-simulator sensitivity check with
+   model-mismatch simulations, heterogeneous traces, bleaching/drift,
+   kinetic-grid sensitivity, and strictly held-out scoring.
 5. Compare policies on an efficacy-cost frontier against tuned open-loop and
    threshold baselines. Intervention cost is currently in arbitrary units.
 6. Treat the blocked-feedback result as a structural sanity check: the same

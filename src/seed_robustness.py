@@ -219,7 +219,7 @@ def summarize_runs(runs: list[dict[str, float | int]]) -> dict[str, object]:
     }
 
 
-def plot_runs(runs: list[dict[str, float | int]], output_path: Path) -> None:
+def plot_runs(runs: list[dict[str, object]], output_path: Path) -> None:
     """Render a compact figure that preserves each seed rather than hiding it."""
     seeds = np.asarray([int(run["base_seed"]) for run in runs])
     smoothed = np.asarray([float(run["smoothed_accuracy"]) for run in runs])
@@ -263,7 +263,7 @@ def plot_runs(runs: list[dict[str, float | int]], output_path: Path) -> None:
     fig.text(
         0.055,
         0.015,
-        "Descriptive variation across fixed simulator seeds; not a confidence interval or biological validation.",
+        "Error bars: per-seed whole-trace bootstrap 95% intervals. Across-seed variation is descriptive, not biological validation.",
         fontsize=8.8,
         color="#5B6472",
     )
@@ -302,7 +302,7 @@ def main() -> None:
     args = parse_args()
     runs = []
     for seed in args.seeds:
-        print(f"\n=== synthetic seed {seed} ===")
+        print(f"\n=== synthetic seed {seed} ===", flush=True)
         result = run_seed(
             seed,
             n_traces=args.n_traces,
@@ -316,7 +316,8 @@ def main() -> None:
         print(
             "  held-out accuracy: "
             f"smoothed={result['smoothed_accuracy']:.3f}, "
-            f"causal={result['causal_accuracy']:.3f}"
+            f"causal={result['causal_accuracy']:.3f}",
+            flush=True,
         )
         print(
             "  causal b1: "
@@ -324,7 +325,8 @@ def main() -> None:
             f"blocked={result['causal_blocked_b1']:+.3f}, "
             f"contrast={result['causal_b1_contrast']:+.3f} "
             f"[{result['causal_b1_contrast_ci95'][0]:+.3f}, "
-            f"{result['causal_b1_contrast_ci95'][1]:+.3f}]"
+            f"{result['causal_b1_contrast_ci95'][1]:+.3f}]",
+            flush=True,
         )
 
     summary = summarize_runs(runs)

@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "analysis_scope": "compact multi-seed synthetic sensitivity analysis; descriptive within the assumed simulator family, not a confidence interval, independent validation, or biological result",
+  "configuration": {
+    "base_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "generator_seed_mapping": "intact=2*base_seed; blocked=2*base_seed+1",
+    "n_traces_per_condition": 30,
+    "fit_traces": 10,
+    "held_out_intact_traces": 20,
+    "frames_per_trace": 600,
+    "kinetic_em_iterations": 12,
+    "trace_cluster_bootstrap_draws_per_arm": 150,
+    "shared_exposure_decay": 0.9
+  },
+  "per_seed": [
+    {
+      "base_seed": 0,
+      "intact_generator_seed": 0,
+      "blocked_generator_seed": 1,
+      "selected_tau": 2.5,
+      "fitted_tau": 2.696051299336579,
+      "smoothed_accuracy": 0.89,
+      "causal_accuracy": 0.8340833333333333,
+      "causal_refractory_recall": 0.7068027210884353,
+      "causal_intact_b1": 0.694218983181974,
+      "causal_intact_b1_ci95": [
+        0.5880273965681512,
+        0.8502321093810524
+      ],
+      "causal_blocked_b1": -0.030343520729322473,
+      "causal_blocked_b1_ci95": [
+        -0.05517584840359968,
+        -0.004314847128446372
+      ],
+      "causal_b1_contrast": 0.7245625039112964,
+      "causal_b1_contrast_ci95": [
+        0.6068817483576281,
+        0.872588707433098
+      ],
+      "contrast_bootstrap_draws": 150,
+      "intact_hazard_frames": 1120,
+      "intact_switch_events": 462,
+      "intact_bootstrap_draws": 150,
+      "blocked_hazard_frames": 7405,
+      "blocked_switch_events": 813,
+      "blocked_bootstrap_draws": 150
+    },
+    {
+      "base_seed": 1,
+      "intact_generator_seed": 2,
+      "blocked_generator_seed": 3,
+      "selected_tau": 2.5,
+      "fitted_tau": 2.745126342168253,
+      "smoothed_accuracy": 0.8651666666666666,
+      "causal_accuracy": 0.8106666666666666,
+      "causal_refractory_recall": 0.7147862648913805,
+      "causal_intact_b1": 0.6553922258525515,
+      "causal_intact_b1_ci95": [
+        0.4991136280339967,
+        0.8631082478875736
+      ],
+      "causal_blocked_b1": -0.041105096792749506,
+      "causal_blocked_b1_ci95": [
+        -0.06863684049647527,
+        -0.0064337463073023855
+      ],
+      "causal_b1_contrast": 0.6964973226453011,
+      "causal_b1_contrast_ci95": [
+        0.5326426780854349,
+        0.8890604427468328
+      ],
+      "contrast_bootstrap_draws": 150,
+      "intact_hazard_frames": 1163,
+      "intact_switch_events": 459,
+      "intact_bootstrap_draws": 150,
+      "blocked_hazard_frames": 6969,
+      "blocked_switch_events": 766,
+      "blocked_bootstrap_draws": 150
+    },
+    {
+      "base_seed": 2,
+      "intact_generator_seed": 4,
+      "blocked_generator_seed": 5,
+      "selected_tau": 2.5,
+      "fitted_tau": 2.501039098795838,
+      "smoothed_accuracy": 0.85525,
+      "causal_accuracy": 0.7905,
+      "causal_refractory_recall": 0.4696296296296296,
+      "causal_intact_b1": 0.6731258778372029,
+      "causal_intact_b1_ci95": [
+        0.5502700630130862,
+        0.8394306913779475
+      ],
+      "causal_blocked_b1": -0.20902772600506525,
+      "causal_blocked_b1_ci95": [
+        -0.2704705675892017,
+        -0.1561615596808336
+      ],
+      "causal_b1_contrast": 0.8821536038422682,
+      "causal_b1_contrast_ci95": [
+        0.7301363277631427,
+        1.0633691268259775
+      ],
+      "contrast_bootstrap_draws": 150,
+      "intact_hazard_frames": 1194,
+      "intact_switch_events": 212,
+      "intact_bootstrap_draws": 150,
+      "blocked_hazard_frames": 6928,
+      "blocked_switch_events": 214,
+      "blocked_bootstrap_draws": 150
+    },
+    {
+      "base_seed": 3,
+      "intact_generator_seed": 6,
+      "blocked_generator_seed": 7,
+      "selected_tau": 2.5,
+      "fitted_tau": 2.6268380543681777,
+      "smoothed_accuracy": 0.8546666666666667,
+      "causal_accuracy": 0.796,
+      "causal_refractory_recall": 0.7307968413496052,
+      "causal_intact_b1": 0.5498791386686283,
+      "causal_intact_b1_ci95": [
+        0.4083489200278946,
+        0.696551488591364
+      ],
+      "causal_blocked_b1": -0.08754757223418431,
+      "causal_blocked_b1_ci95": [
+        -0.13181115157442516,
+        -0.04519801320085505
+      ],
+      "causal_b1_contrast": 0.6374267109028126,
+      "causal_b1_contrast_ci95": [
+        0.4888656321709981,
+        0.7846267142648896
+      ],
+      "contrast_bootstrap_draws": 150,
+      "intact_hazard_frames": 1079,
+      "intact_switch_events": 393,
+      "intact_bootstrap_draws": 150,
+      "blocked_hazard_frames": 7137,
+      "blocked_switch_events": 522,
+      "blocked_bootstrap_draws": 150
+    },
+    {
+      "base_seed": 4,
+      "intact_generator_seed": 8,
+      "blocked_generator_seed": 9,
+      "selected_tau": 2.5,
+      "fitted_tau": 2.5232925260803327,
+      "smoothed_accuracy": 0.83025,
+      "causal_accuracy": 0.7604166666666666,
+      "causal_refractory_recall": 0.6684819605173588,
+      "causal_intact_b1": 0.7278821430973529,
+      "causal_intact_b1_ci95": [
+        0.5657391162433624,
+        0.921391635475551
+      ],
+      "causal_blocked_b1": -0.16361425396790574,
+      "causal_blocked_b1_ci95": [
+        -0.19623577982824267,
+        -0.12446941643269
+      ],
+      "causal_b1_contrast": 0.8914963970652586,
+      "causal_b1_contrast_ci95": [
+        0.7121035825239012,
+        1.0867704441760873
+      ],
+      "contrast_bootstrap_draws": 150,
+      "intact_hazard_frames": 1051,
+      "intact_switch_events": 323,
+      "intact_bootstrap_draws": 150,
+      "blocked_hazard_frames": 6654,
+      "blocked_switch_events": 359,
+      "blocked_bootstrap_draws": 150
+    }
+  ],
+  "summary": {
+    "descriptive_statistics": {
+      "smoothed_accuracy": {
+        "mean": 0.8590666666666668,
+        "median": 0.85525,
+        "minimum": 0.83025,
+        "maximum": 0.89
+      },
+      "causal_accuracy": {
+        "mean": 0.7983333333333333,
+        "median": 0.796,
+        "minimum": 0.7604166666666666,
+        "maximum": 0.8340833333333333
+      },
+      "causal_refractory_recall": {
+        "mean": 0.6580994834952819,
+        "median": 0.7068027210884353,
+        "minimum": 0.4696296296296296,
+        "maximum": 0.7307968413496052
+      },
+      "causal_intact_b1": {
+        "mean": 0.660099673727542,
+        "median": 0.6731258778372029,
+        "minimum": 0.5498791386686283,
+        "maximum": 0.7278821430973529
+      },
+      "causal_blocked_b1": {
+        "mean": -0.10632763394584546,
+        "median": -0.08754757223418431,
+        "minimum": -0.20902772600506525,
+        "maximum": -0.030343520729322473
+      },
+      "causal_b1_contrast": {
+        "mean": 0.7664273076733873,
+        "median": 0.7245625039112964,
+        "minimum": 0.6374267109028126,
+        "maximum": 0.8914963970652586
+      }
+    },
+    "direction_checks": {
+      "positive_causal_contrasts": 5,
+      "contrast_intervals_excluding_zero": 5,
+      "total_seed_replicates": 5
+    }
+  }
+}

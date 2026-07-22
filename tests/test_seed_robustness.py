@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -44,6 +45,17 @@ class SeedRobustnessTests(unittest.TestCase):
     def test_summary_requires_at_least_one_run(self):
         with self.assertRaisesRegex(ValueError, "at least one"):
             summarize_runs([])
+
+    def test_versioned_five_seed_benchmark_keeps_its_documented_guardrails(self):
+        result_path = ROOT / "results" / "seed_robustness.json"
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        runs = payload["per_seed"]
+        self.assertEqual(len(runs), 5)
+        self.assertTrue(all(float(run["causal_accuracy"]) >= 0.70 for run in runs))
+        self.assertTrue(all(float(run["causal_b1_contrast"]) > 0 for run in runs))
+        self.assertGreaterEqual(
+            sum(float(run["causal_b1_contrast_ci95"][0]) > 0 for run in runs), 4
+        )
 
 
 if __name__ == "__main__":
