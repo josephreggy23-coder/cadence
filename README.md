@@ -1,4 +1,4 @@
-# CADENCE
+# CADENCE: Sensor-Aware Glial Calcium Modeling and Control
 
 [![Tests](https://github.com/josephreggy23-coder/cadence/actions/workflows/tests.yml/badge.svg)](https://github.com/josephreggy23-coder/cadence/actions/workflows/tests.yml)
 
@@ -12,6 +12,8 @@ public mouse astrocyte recordings.
 > **Research status:** synthetic methods benchmark plus exploratory public-data
 > analysis. CADENCE is not evidence of treatment efficacy, a confirmed astrocyte
 > state mechanism, or a clinical controller.
+
+New to the project? Start with the [plain-language tutorial](docs/tutorial.md).
 
 ## Research question
 
