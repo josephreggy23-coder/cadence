@@ -80,7 +80,7 @@ matplotlib.use("Agg")  # headless: we only ever save figures, never display
 import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
 
-from features import make_features, n_features as n_feat, CALCIUM_COL
+from features import make_features, CALCIUM_COL
 
 
 # --------------------------------------------------------------------------- #
