@@ -1,66 +1,17 @@
-"""
-kinetic_hmm.py  —  CADENCE pipeline, Module 1b  (improved state estimator)
-==========================================================================
-A switching state-space model that puts the CALCIUM SENSOR INSIDE the model,
-replacing the plain Gaussian HMM used in Modules 1-2.
+"""Sensor-aware switching model for synthetic calcium traces.
 
-WHY THE GAUSSIAN HMM WAS THE WRONG MODEL
-----------------------------------------
-A Gaussian HMM assumes the observation depends only on the current hidden state:
-`y_t ~ N(mu[s_t], sd[s_t])`. For this data that assumption is FALSE BY
-CONSTRUCTION. The generator passes the state sequence through a causal
-exponential sensor:
+The observation model includes exponential sensor dynamics,
 
-    c_t = c_{t-1} + (mu[s_t] - c_{t-1}) / tau        y_t = c_t + noise
+    c[t] = c[t-1] + (mu[s[t]] - c[t-1]) / tau
+    y[t] = c[t] + noise,
 
-so `y_t` depends on the entire state HISTORY, not just `s_t`. The consequence was
-concentrated exactly where it hurt most: REFRACTORY frames follow SUSTAINED_HIGH,
-so the sensor is still coasting down through the oscillatory range while the
-underlying state has already switched off. The Gaussian HMM had no way to
-represent "this is a low state whose sensor has not caught up yet", so it called
-those frames OSCILLATORY.
+so fluorescence depends on both the latent regime and prior sensor level. The
+continuous sensor state is discretized on a grid and combined with the four
+regimes for forward-backward inference. Profile likelihood selects ``tau``;
+EM updates the transition matrix, latent levels, and observation noise.
 
-Two rounds of feature engineering were attempts to work around this, and both hit
-a wall (documented in features.py and in the README):
-  - adding the slope raised REFRACTORY recall 24% -> 38%, then plateaued;
-  - masking the transition matrix so REFRACTORY is only reachable from
-    SUSTAINED_HIGH made things WORSE (accuracy 69% -> 45%), because the problem
-    was never the transition structure.
-
-THE FIX
--------
-Track the JOINT state (discrete regime s_t, continuous sensor level c_t). Because
-c evolves deterministically given (c_{t-1}, s_t), exact inference is possible:
-discretise c on a grid and run an ordinary forward-backward recursion over the
-4 x NC joint state. No particle filter, no approximation beyond the grid.
-
-MEASURED EFFECT (intact, oracle parameters - the ceiling this model can reach):
-    model                    accuracy   SUSTAINED_HIGH prec   REFRACTORY recall
-    Gaussian HMM (level+slope)  68.5%          44.0%                37.8%
-    kinetic (this file)         89.7%          96.8%                58.7%
-
-REFRACTORY recall roughly doubles and, just as importantly, its PRECISION goes
-from 27% to 83% - the model stops sprinkling false refractory calls, which is
-precisely the error that was biasing b1 in Module 3.
-
-HONESTY: REFRACTORY IS STILL THE HARDEST STATE
------------------------------------------------
-Even with a correctly specified observation model and oracle parameters, recall
-is 58.7%, not 95%. That residual is a genuine INFORMATION limit, not a modelling
-failure: during the first frames after a high-to-refractory switch, a 2 Hz GCaMP
-trace simply does not yet carry evidence that the switch happened. The honest
-conclusion is about sensor bandwidth, not about the estimator - and it means
-faster indicators, not cleverer inference, are what would close the remaining gap.
-
-PARAMETER ESTIMATION (nothing here is handed the ground truth)
---------------------------------------------------------------
-  - `tau` (sensor time constant) - profile likelihood over a grid. On real data
-    this must be estimated too, so we never assume it.
-  - `mu`, `sd` (latent level and noise per state) - numerically optimised on the
-    marginal likelihood.
-  - `A` (transition matrix) - closed-form EM update from pairwise posteriors.
-States are indexed internally in ASCENDING CALCIUM ORDER, so the biological
-labelling rule is identical to the one used everywhere else in the pipeline.
+Internal states are ordered by latent calcium level and mapped to the simulator's
+label convention only during evaluation.
 """
 
 import argparse
@@ -104,17 +55,10 @@ class KineticHMM:
             self.cmap[s] = np.clip(np.searchsorted(self.cgrid, nxt), 0, self.nc - 1)
 
     def _emission(self, y):
-        """
-        B[t, s, i] = N(y_t ; cgrid[i], sd[s]), rescaled per frame for numerical
-        stability, PLUS the log of the rescaling constant.
+        """Return rescaled emission probabilities and their log offsets.
 
-        Returning the constant is essential, not cosmetic: the forward recursion
-        accumulates log(z_t) from the rescaled values, so omitting the per-frame
-        offset yields a quantity that is not the log-likelihood at all. An earlier
-        version dropped it, and the parameter optimiser promptly exploited the
-        bug by inflating sd -> 1.0 and tau -> 18.8 (a degenerate fit whose
-        "likelihood" looked excellent). The offset is what makes wide, sloppy
-        emissions correctly score WORSE.
+        The forward recursion needs the offsets to recover the log-likelihood
+        after per-frame rescaling.
         """
         z = (y[:, None, None] - self.cgrid[None, None, :]) / self.sd[None, :, None]
         logB = -0.5 * z * z - np.log(self.sd)[None, :, None]

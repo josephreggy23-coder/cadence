@@ -1,30 +1,11 @@
-"""
-test_pipeline.py  —  CADENCE pipeline, Module 6
-===============================================
-Regression tests for the documented SYNTHETIC BENCHMARK, not just code paths.
+"""Regression checks for the versioned synthetic benchmark.
 
-The point of this file is that a future refactor cannot silently break the
-central results. Each test corresponds to a claim the project makes in public:
+The tests protect reported estimator contrasts, controller behavior, structural
+blockade, and intervention-budget limits. Oracle-state checks isolate the hazard
+estimator; end-to-end checks use causal inferred states and exclude traces used
+for model fitting.
 
-  1. b1 is recovered significantly > 0 when feedback is intact.
-  2. The oracle blocked slope is near zero; causal hard labels retain a small,
-     explicitly documented null bias.
-  3. b1_intact > b1_blocked in the fixed simulation contrast.
-  4. CADENCE reduces synthetic high-state occupancy versus no control.
-  5. Structural checks enforce the assumed coupling and hard exposure budget.
-
-Runs with plain `python tests/test_pipeline.py` (no pytest required, keeping
-inside the numpy/scipy/pandas/matplotlib/hmmlearn dependency budget), and is also
-importable by pytest if you have it.
-
-PREREQUISITE: run the pipeline first, so data/decoded_*.csv and models/ exist:
-    python src/run_all.py --quick --skip-existing
-
-A NOTE ON WHICH STATES EACH TEST USES
-------------------------------------
-Oracle-state checks isolate the hazard estimator. End-to-end checks use inferred
-states and exclude traces used to fit the state model. Both views are kept so
-state-decoding error cannot be mistaken for hazard-model performance.
+Run ``python src/run_all.py --quick`` before invoking this file directly.
 """
 
 import json

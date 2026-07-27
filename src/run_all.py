@@ -1,29 +1,9 @@
-"""
-run_all.py  —  CADENCE pipeline, Module 5
-=========================================
-One command reproduces the synthetic benchmark and, when the versioned compact
-H1R export is present, the real-data secondary analysis: generated traces,
-fitted model, held-out state recovery, hazard-law recovery, policy stress tests,
-machine-readable results, and figures.
+"""Run the reproducible CADENCE analysis pipeline.
 
-    python src/run_all.py                 # full run (model-order sweep included)
-    python src/run_all.py --quick         # fast rerun, narrower sweep
-    python src/run_all.py --skip-existing # don't regenerate data that's present
-
-WHY A SUBPROCESS ORCHESTRATOR RATHER THAN IMPORTS
---------------------------------------------------
-Each stage is invoked exactly as the README documents it, through its own CLI.
-That means this script cannot silently diverge from the documented commands — if
-`python src/fit_hmm.py` breaks, `run_all.py` breaks in the same way, rather than
-succeeding through some private code path a reader can't reproduce by hand.
-
-REPRODUCIBILITY
----------------
-Every stage takes an explicit --seed and all of them default to the same value,
-so a full run is deterministic end to end. The only figure this script produces
-directly is the transition-matrix comparison (below); everything else is written
-by the module that owns it, so a figure can never drift from the analysis that
-generated it.
+Each stage is invoked through its documented command-line interface: synthetic
+generation, sensor-aware model fitting, held-out state recovery, hazard
+estimation, controller stress testing, and the optional H1R secondary analysis.
+Explicit seeds make the versioned compact benchmark deterministic.
 """
 
 import argparse
@@ -50,7 +30,7 @@ def run(cmd, label):
     env = dict(os.environ, PYTHONPATH=SRC, PYTHONIOENCODING="utf-8")
     res = subprocess.run(cmd, cwd=ROOT, env=env)
     if res.returncode != 0:
-        print(f"\n!!! stage failed: {label} (exit {res.returncode})")
+        print(f"\nStage failed: {label} (exit {res.returncode})")
         sys.exit(res.returncode)
     print(f"    [{label} done in {time.time() - t0:.1f}s]")
 

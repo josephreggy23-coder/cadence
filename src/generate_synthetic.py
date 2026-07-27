@@ -1,37 +1,15 @@
-"""
-generate_synthetic.py
-----------------------
-Ground-truth simulator for astrocyte-inspired calcium dynamics.
+"""Generate labelled calcium traces for the CADENCE synthetic benchmark.
 
-WHY THIS EXISTS
-The simulator deliberately encodes a hidden, dwell-dependent exit law: the
-longer the process remains in a high state, the more likely it is to switch into
-a refractory state. Recovering a KNOWN law is a software and model benchmark. It
-does not show that the same law exists in astrocytes or that it can be recovered
-from an unlabeled biological recording.
+The simulator has four hidden states and an exposure-dependent transition from
+SUSTAINED_HIGH to REFRACTORY:
 
-MODEL
-Four hidden states:
-    0 = QUIESCENT      (low baseline calcium)
-    1 = OSCILLATORY    (baseline waves)
-    2 = SUSTAINED_HIGH (synthetic elevated state)
-    3 = REFRACTORY     (self-suppressed, the feedback "off" state)
+    P(exit | L) = sigmoid(beta0 + beta1 * L)
 
-Emissions: continuous calcium fluorescence (dF/F-like), state-specific mean +
-noise, with slow GCaMP-like temporal smoothing so traces resemble real imaging.
-
-THE FEEDBACK LAW (the thing to be discovered):
-The transition SUSTAINED_HIGH -> REFRACTORY is NOT constant. Its probability
-rises with an accumulated "calcium load" variable L that integrates recent time
-spent in the high state. This makes the process semi-Markov / load-dependent:
-    P(high -> refractory | L) = sigmoid(beta0 + beta1 * L)
-with beta1 > 0. beta1 is the quantitative signature of negative feedback.
-A comparison condition sets beta1 near zero, flattening the law. This is a
-fixed simulation contrast, not a pharmacological experiment.
-
-USAGE
-    python generate_synthetic.py --condition intact  --n_traces 60 --out data/intact.csv
-    python generate_synthetic.py --condition blocked --n_traces 60 --out data/blocked.csv
+Recent high-state occupancy accumulates in ``L`` and decays outside that state.
+The intact condition uses a positive slope; the blocked comparison uses a
+near-zero slope. State-specific signals pass through an exponential sensor model
+and observation noise. These assumptions define a software benchmark, not a
+biological mechanism.
 """
 
 import argparse
@@ -41,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# ----- fixed biology-inspired parameters (documented, not magic numbers) -----
+# Fixed simulator parameters.
 STATE_NAMES = ["QUIESCENT", "OSCILLATORY", "SUSTAINED_HIGH", "REFRACTORY"]
 DATASET_COLUMNS = ["condition", "trace_id", "time_s", "calcium", "true_state", "load"]
 EMISSION_MEAN = np.array([0.05, 0.35, 0.90, 0.10])   # dF/F-like mean per state

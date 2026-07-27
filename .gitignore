@@ -54,10 +54,7 @@ outputs/
 models/
 *.joblib
 
-# NOTE: figures/ is deliberately NOT ignored. The publication figures are the
-# headline result of this project and are embedded in README.md, so they must be
-# versioned for GitHub to render them. They remain fully regenerable via
-# `python src/run_all.py`.
+# Figures are versioned for the README and remain reproducible with run_all.py.
 
 # ---- OS / editor cruft ----
 .DS_Store

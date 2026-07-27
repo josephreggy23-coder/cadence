@@ -33,5 +33,5 @@ and the proposed interpretation boundary.
 
 Do not add a result to make the project appear more active or more conclusive
 than the evidence allows. Keep generated artifacts traceable to code, preserve
-negative or mixed results, and describe assistance and source-data reuse as
-documented in [AI_ASSISTANCE.md](AI_ASSISTANCE.md).
+negative or mixed results, and document assistance and source-data reuse as
+described in [RESEARCH_DISCLOSURE.md](RESEARCH_DISCLOSURE.md).

@@ -66,8 +66,8 @@ Before applying, the student should ask `science@aan.com` for written guidance o
 
 - whether secondary analysis of an open dataset is eligible;
 - how AAN interprets an "individual project" when the source dataset has its own
-  authors and the code has received AI assistance;
-- what AI-assisted coding is permitted and how it should be disclosed;
+  authors and the code has received software assistance;
+- what software assistance is permitted and how it should be disclosed;
 - the next deadline and current report/file limits;
 - whether prior publication or public GitHub development affects eligibility.
 
@@ -98,7 +98,7 @@ Before applying, the student should ask `science@aan.com` for written guidance o
 - [ ] I wrote the application abstract and report in my own words.
 - [ ] Every number in the abstract points to a script, result file, and figure.
 - [ ] I distinguish exploratory analyses from prospective confirmation.
-- [ ] I disclose data reuse, software tools, and AI assistance as AAN directs.
+- [ ] I disclose data reuse and software assistance as AAN directs.
 - [ ] Parent/guardian, teacher, and mentor signatures are arranged.
 
 Official recipients are listed on AAN's

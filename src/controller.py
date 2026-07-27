@@ -233,7 +233,7 @@ class Cadence:
         p_endo = sigmoid(self.b0 + self.b1 * L)
         p_escape_alone = 1.0 - (1.0 - p_endo) ** self.horizon
         if p_escape_alone >= self.target:
-            return 0.0                      # it will fix itself - stay silent
+            return 0.0
 
         # smallest u that lifts per-frame escape probability to what's needed
         p_needed = 1.0 - (1.0 - self.target) ** (1.0 / self.horizon)
@@ -247,24 +247,15 @@ class Cadence:
 
 
 class AdaptiveCadence(Cadence):
-    """
-    Synthetic policy that updates b0 from unstimulated inferred transitions.
+    """Synthetic policy that updates ``b0`` from unstimulated transitions.
 
-    The simulator assumes b1 transfers while b0 changes across conditions. This
-    class tests adaptation under that assumption; it does not establish that the
-    same parameter split holds biologically.
+    During an initial observation window, the policy records inferred high-state
+    exposure and exit outcomes without stimulating. It then estimates ``b0`` by
+    one-dimensional maximum likelihood with ``b1`` fixed and periodically refits
+    as new unstimulated transitions become available.
 
-    HOW
-      1. OBSERVE-ONLY WINDOW. For the first `calib_frames` frames the controller
-         applies no stimulation and simply records (load, did-it-switch-off)
-         pairs from its own inferred states. Intervening during this window would
-         contaminate the estimate - the whole point is to measure the cell's
-         UNAIDED behaviour.
-      2. Fit b0 by 1-D maximum likelihood with b1 held fixed.
-      3. Refit periodically as more evidence accumulates, then control as usual.
-
-    Limitation: the observe-only window delays intervention, and the estimate is
-    only as good as the online state inference feeding it.
+    This tests the simulator's assumption that ``b1`` transfers while ``b0``
+    changes. It is not evidence that the same parameter split holds biologically.
     """
     name = "CADENCE (self-calibrating)"
 

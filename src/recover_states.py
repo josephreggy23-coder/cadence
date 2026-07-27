@@ -1,55 +1,13 @@
-"""
-recover_states.py  —  CADENCE pipeline, Module 2
-================================================
-Decode hidden states from the fitted model, map anonymous state indices to the
-simulator's labels, and then MEASURE how well the method recovers ground truth.
+"""Decode and evaluate hidden states from a fitted CADENCE model.
 
-WHY THIS MODULE IS THE CREDIBILITY GATE
----------------------------------------
-Module 1 fit a model; a fit alone proves nothing. The claim CADENCE depends on is
-that the hidden regimes we infer from a noisy trace *are the real ones*. This
-module is where that claim is tested against ground truth, before any feedback
-law (Module 3) or controller (Module 4) is built on top of it. If state recovery
-failed here, every downstream result would be built on sand — so we measure it
-explicitly and report it warts-and-all.
+The kinetic estimator produces offline-smoothed and causal filtered labels. The
+Gaussian-HMM ablation uses Viterbi decoding. Anonymous model states are mapped by
+their fitted calcium-level ordering, without consulting ``true_state``. Simulator
+labels are used only to calculate accuracy, confusion matrices, precision, and
+recall.
 
-THE THREE STEPS
----------------
-1) DECODE. The kinetic model writes both smoothed marginal MAP labels from its
-   forward-backward posterior and causal filtered labels using only observations
-   available through the current frame. Module 3 uses the causal labels because
-   Module 4 must operate online. The Gaussian-HMM ablation uses Viterbi.
-
-2) LABEL. State indices are arbitrary (EM could number them any way). We assign
-   the simulator's names by ORDERING THE EMISSION MEANS. This uses only the
-   synthetic model's fixed relative calcium ordering:
-        QUIESCENT  <  REFRACTORY  <  OSCILLATORY  <  SUSTAINED_HIGH
-   (quiescent baseline is lowest; the refractory "off" state is suppressed but
-   slightly above baseline; oscillatory rides higher; sustained-high is highest).
-   We do NOT use `true_state` to choose the mapping. On unlabeled biological data,
-   these names would require independent experimental validation.
-
-3) SCORE. Accuracy + a full confusion matrix + per-state precision/recall,
-   computed by hand with numpy (staying inside the numpy/scipy/pandas/matplotlib
-   /hmmlearn dependency budget).
-
-WHAT TO EXPECT (and why perfect accuracy would be suspicious)
--------------------------------------------------------------
-The simulator convolves the state sequence with a GCaMP-like exponential kernel
-(GCAMP_TAU = 3 frames). That means the OBSERVED calcium lags and blurs the TRUE
-state, exactly as a real sensor does. Two consequences we expect and report:
-  - transition frames are systematically mislabeled (the sensor hasn't caught up),
-  - QUIESCENT (true mean 0.05) and REFRACTORY (true mean 0.10) are only 0.05 apart
-    and get blurred together, so they are the dominant confusion.
-A model reporting ~100% frame accuracy on this data would indicate a leak (e.g.
-accidentally training on labels), not a triumph. Honest recovery here is partial
-and structured, and we show exactly where it fails.
-
-OUTPUT
-------
-  data/decoded_<condition>.csv   smoothed + causal states for Module 3
-  figures/state_recovery_trace.png     example trace, true vs inferred
-  figures/state_recovery_confusion.png held-out intact and blocked matrices
+Decoded traces are written to ``data/decoded_<condition>.csv`` for downstream
+hazard estimation.
 """
 
 import argparse

@@ -23,8 +23,7 @@ per-cell calibration. Unexpectedly, improving state estimation degraded a
 naive controller, revealing that feedback gain generalizes across disease while
 baseline excitability does not, a dissociation that motivated online calibration.
 Critically, blocking the feedback pathway abolished restoration by design,
-confirming mechanism-dependent control rather than brute force. Together, these
-results show CADENCE excels at recovering hidden regulatory rules from
-imaging and delivering precisely timed, low-dose, mechanism-specific intervention
-that resists fooling itself, establishing a foundation for efficient, adaptive
-closed-loop neuromodulation of glial calcium in CNS disease.
+demonstrating that the simulated intervention depends on its assumed coupling.
+Together, these results establish a reproducible framework for testing
+sensor-aware state inference and assumption-dependent control while identifying
+the calibration and validation required before biological use.
