@@ -69,3 +69,7 @@ desktop.ini
 # ---- Environment / secrets ----
 .env
 .env.*
+
+# ---- Additional test artifacts ----
+coverage.xml
+.hypothesis/
