@@ -73,3 +73,6 @@ desktop.ini
 # ---- Additional test artifacts ----
 coverage.xml
 .hypothesis/
+
+# ---- Logs ----
+*.log
