@@ -14,6 +14,7 @@ public mouse astrocyte recordings.
 > state mechanism, or a clinical controller.
 
 New to the project? Start with the [plain-language tutorial](docs/tutorial.md).
+The one-page summary is in [ABSTRACT.md](ABSTRACT.md).
 
 ## Research question
 
