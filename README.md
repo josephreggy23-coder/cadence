@@ -150,6 +150,7 @@ python src/run_all.py --quick --n_traces 30 --fit_traces 10 --control_traces 6
 python src/seed_robustness.py
 
 # Run unit and claim-level regression checks
+python scripts/check_abstract_length.py
 python -m unittest discover -s tests -v
 python tests/test_pipeline.py
 ```
