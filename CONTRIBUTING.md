@@ -5,6 +5,9 @@ or interpretation more reproducible—not merely make the repository busier.
 
 ## Before proposing a change
 
+New to the codebase? Set up the environment and run the compact pipeline with
+the [tutorial](docs/tutorial.md) first.
+
 1. State whether the change affects synthetic benchmarking, public-data analysis,
    documentation, or infrastructure.
 2. Keep synthetic results, exploratory secondary analyses, and biological claims
