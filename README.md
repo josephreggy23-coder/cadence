@@ -140,7 +140,8 @@ efficiency discovery; CADENCE can also use a larger peak dose than open loop.
 ## Reproduce
 
 Python 3.11 or newer is recommended. For virtual-environment setup on Windows,
-macOS, or Linux, see the [tutorial](docs/tutorial.md#1-set-up-python).
+macOS, or Linux, see the [tutorial](docs/tutorial.md#1-set-up-python). Run all
+commands from the repository root.
 
 ```bash
 python -m pip install -r requirements.txt
