@@ -76,3 +76,7 @@ coverage.xml
 
 # ---- Logs ----
 *.log
+
+# ---- MATLAB ----
+*.asv
+*.m~
