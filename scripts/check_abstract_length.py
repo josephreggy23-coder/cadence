@@ -32,8 +32,16 @@ def word_count(markdown: str) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("path", nargs="?", type=Path, default=Path("ABSTRACT.md"))
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+    parser.add_argument(
+        "path",
+        nargs="?",
+        type=Path,
+        default=Path("ABSTRACT.md"),
+        help="abstract Markdown file (default: ABSTRACT.md)",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help="maximum abstract-body word count"
+    )
     args = parser.parse_args()
 
     if args.limit < 1:
