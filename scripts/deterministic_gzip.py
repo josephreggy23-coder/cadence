@@ -19,8 +19,8 @@ def compress(source: Path, destination: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path)
-    parser.add_argument("destination", type=Path)
+    parser.add_argument("source", type=Path, help="file to compress")
+    parser.add_argument("destination", type=Path, help="output .gz path")
     args = parser.parse_args()
     compress(args.source, args.destination)
 
