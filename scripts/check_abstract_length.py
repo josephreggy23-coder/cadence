@@ -19,7 +19,7 @@ def abstract_body(markdown: str) -> str:
     lines = []
     for line in markdown.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith(">"):
+        if not stripped or stripped.startswith(("#", ">")):
             continue
         lines.append(stripped)
     return " ".join(lines)
