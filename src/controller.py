@@ -450,7 +450,7 @@ def evaluate(policy_factory, estimator, n_traces, seed, **sim_kw):
     """Run several traces and aggregate the two metrics that matter."""
     rng = np.random.default_rng(seed)
     high_frac, costs, traces = [], [], []
-    for i in range(n_traces):
+    for _ in range(n_traces):
         out = simulate_closed_loop(policy_factory(), estimator, rng, **sim_kw)
         high_frac.append(np.mean(out["true_state"] == HIGH))
         costs.append(out["action"].sum())

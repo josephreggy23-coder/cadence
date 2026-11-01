@@ -293,7 +293,7 @@ def main():
     covs = diag_covars(final_model)
     order = np.argsort(means)
     print("  learned emission means (sorted, low -> high calcium):")
-    for rank, s in enumerate(order):
+    for s in order:
         sd = np.sqrt(covs[s, CALCIUM_COL])
         extra = ""
         if X.shape[1] > 1:  # report the slope dimension too, when present
