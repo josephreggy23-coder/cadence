@@ -67,6 +67,9 @@ Two datasets are generated:
   entering the refractory state.
 - `data/blocked.csv`: that exposure-dependent relationship is nearly flat.
 
+Both files are regenerable and git-ignored, so they will not appear in a fresh
+clone until you run the generator.
+
 Every row contains a trace identifier, time, observed calcium-like
 fluorescence, the simulator's true state, and the simulator's exposure value.
 The true labels let the project measure whether state inference works.
